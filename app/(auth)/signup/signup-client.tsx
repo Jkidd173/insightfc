@@ -11,10 +11,24 @@ export default function SignupClient() {
   const searchParams = useSearchParams();
 
   const inviteToken = searchParams?.get("inviteToken") || "";
-  const [role, setRole] = useState<Role>(inviteToken ? "player" : "coach");
+  const forcedPlayer = Boolean(inviteToken);
 
+  const [role, setRole] = useState<Role>(forcedPlayer ? "player" : "coach");
+
+  // Shared auth fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Player identity
+  const [playerFirstName, setPlayerFirstName] = useState("");
+  const [playerLastName, setPlayerLastName] = useState("");
+  const [playerNickname, setPlayerNickname] = useState("");
+
+  // Coach identity
+  const [coachFirstName, setCoachFirstName] = useState("");
+  const [coachLastName, setCoachLastName] = useState("");
+  const [clubAffiliation, setClubAffiliation] = useState("");
+  const [stateRegion, setStateRegion] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -57,34 +71,64 @@ export default function SignupClient() {
     );
   }
 
+  function clean(val: string) {
+    return val.trim().replace(/\s+/g, " ");
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
 
-    const finalRole: Role = inviteToken ? "player" : role;
+    const finalRole: Role = forcedPlayer ? "player" : role;
 
     if (!email.trim() || !password) {
-      setMessage("Please enter your email and password.");
+      setMessage("Please enter an email and password.");
       return;
     }
+
     if (password.length < 6) {
       setMessage("Password must be at least 6 characters.");
       return;
     }
 
+    if (finalRole === "player") {
+      if (!clean(playerFirstName) || !clean(playerLastName)) {
+        setMessage("Please enter the player’s first and last name.");
+        return;
+      }
+    }
+
+    if (finalRole === "coach") {
+      if (!clean(coachFirstName) || !clean(coachLastName)) {
+        setMessage("Please enter your first and last name (coach).");
+        return;
+      }
+    }
+
     setLoading(true);
+
     try {
+      const metadata: Record<string, any> = {
+        role: finalRole,
+        inviteToken: inviteToken || null,
+      };
+
+      if (finalRole === "player") {
+        metadata.player_first_name = clean(playerFirstName);
+        metadata.player_last_name = clean(playerLastName);
+        metadata.player_nickname = clean(playerNickname) || null;
+        metadata.account_email_type = "parent_guardian";
+      } else {
+        metadata.coach_first_name = clean(coachFirstName);
+        metadata.coach_last_name = clean(coachLastName);
+        metadata.club_affiliation = clean(clubAffiliation) || null;
+        metadata.state_region = clean(stateRegion) || null;
+      }
+
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: {
-          // We store role and inviteToken in metadata for now.
-          // Later we’ll move invite acceptance into a server API route.
-          data: {
-            role: finalRole,
-            inviteToken: inviteToken || null,
-          },
-        },
+        options: { data: metadata },
       });
 
       if (error) {
@@ -93,8 +137,6 @@ export default function SignupClient() {
         return;
       }
 
-      // Many Supabase setups require email confirmation.
-      // We’ll send them to login with a friendly message.
       router.replace("/login");
     } catch (err: any) {
       setMessage(err?.message || "Signup failed. Please try again.");
@@ -105,20 +147,24 @@ export default function SignupClient() {
     setLoading(false);
   }
 
+  const showingRolePicker = !forcedPlayer;
+  const finalRoleForUI: Role = forcedPlayer ? "player" : role;
+
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-lg">
         <Logo />
 
         <h1 className="mt-6 text-xl font-bold text-white">Create account</h1>
+
         <p className="mt-1 text-sm text-zinc-400">
-          {inviteToken
-            ? "You were invited as a player. Finish creating your account."
+          {forcedPlayer
+            ? "You were invited as a player. A parent/guardian can create this account."
             : "Create your InsightFC account to get started."}
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          {!inviteToken ? (
+          {showingRolePicker && (
             <div className="space-y-2">
               <label className="text-sm text-zinc-300">Role</label>
               <select
@@ -130,24 +176,122 @@ export default function SignupClient() {
                 <option value="player">Player</option>
               </select>
             </div>
-          ) : (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-200">
-              Role: <span className="font-semibold">Player</span> (forced by
-              invite)
-            </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-sm text-zinc-300">Email</label>
-            <input
-              className={inputClass}
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
-          </div>
+          {finalRoleForUI === "player" && (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">Player First Name</label>
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={playerFirstName}
+                  onChange={(e) => setPlayerFirstName(e.target.value)}
+                  placeholder="Jacob"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">Player Last Name</label>
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={playerLastName}
+                  onChange={(e) => setPlayerLastName(e.target.value)}
+                  placeholder="Phillips"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">
+                  Nickname <span className="text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={playerNickname}
+                  onChange={(e) => setPlayerNickname(e.target.value)}
+                  placeholder='e.g. "Jake", "JP"'
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">Parent/Guardian Email</label>
+                <input
+                  className={inputClass}
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="parent@email.com"
+                />
+              </div>
+            </>
+          )}
+
+          {finalRoleForUI === "coach" && (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">First Name</label>
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={coachFirstName}
+                  onChange={(e) => setCoachFirstName(e.target.value)}
+                  placeholder="Michael"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">Last Name</label>
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={coachLastName}
+                  onChange={(e) => setCoachLastName(e.target.value)}
+                  placeholder="Carrick"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">
+                  Club Affiliation <span className="text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={clubAffiliation}
+                  onChange={(e) => setClubAffiliation(e.target.value)}
+                  placeholder="Manchester United"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">
+                  State <span className="text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  className={inputClass}
+                  type="text"
+                  value={stateRegion}
+                  onChange={(e) => setStateRegion(e.target.value)}
+                  placeholder="e.g. CA"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-300">Email</label>
+                <input
+                  className={inputClass}
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="coach@club.com"
+                />
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm text-zinc-300">Password</label>
@@ -161,11 +305,11 @@ export default function SignupClient() {
             />
           </div>
 
-          {message ? (
+          {message && (
             <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-200">
               {message}
             </div>
-          ) : null}
+          )}
 
           <button type="submit" className={primaryBtn} disabled={loading}>
             {loading ? "Creating..." : "Create account"}
