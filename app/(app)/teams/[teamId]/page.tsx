@@ -1,68 +1,128 @@
-// app/teams/[teamId]/page.tsx
 "use client";
 
-import Link from "next/link";
+import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+
+type Team = {
+  id: string;
+  name: string;
+  season: string;
+};
 
 export default function TeamHomePage() {
   const params = useParams();
-  const teamId = params.teamId as string;
+  const teamId = (params?.teamId as string | undefined) ?? "";
 
-  const [mounted, setMounted] = useState(false);
+  const [team, setTeam] = useState<Team | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadTeam() {
+    setError(null);
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id,name,season")
+        .eq("id", teamId)
+        .single();
+
+      if (error) throw error;
+      setTeam(data as Team);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load team.");
+      setTeam(null);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (!teamId) return;
+    loadTeam();
+  }, [teamId]);
 
-  if (!mounted) return null;
+  if (!teamId) {
+    return <div style={{ padding: 24 }}>Missing team id.</div>;
+  }
+
+  if (loading) {
+    return <div style={{ padding: 24, opacity: 0.85 }}>Loading team…</div>;
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: 24 }}>
+        <div style={{ color: "#ff6666", fontWeight: 950 }}>{error}</div>
+        <button
+          onClick={loadTeam}
+          style={{
+            marginTop: 12,
+            padding: "10px 14px",
+            borderRadius: 12,
+            fontWeight: 900,
+            cursor: "pointer",
+            border: "1px solid rgba(255,255,255,0.2)",
+            background: "transparent",
+            color: "inherit",
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!team) {
+    return <div style={{ padding: 24 }}>Team not found.</div>;
+  }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Team Home</h1>
-        <p className="muted">Choose a section to continue.</p>
-      </div>
+    <div>
+      <h1 style={{ fontSize: 34, fontWeight: 950, margin: 0 }}>{team.name}</h1>
+      <div style={{ opacity: 0.85, marginTop: 6 }}>{team.season}</div>
 
-      {/* Navigation Buttons */}
-      <div className="flex flex-wrap gap-4">
-        <Link
-          href={`/teams/${teamId}/schedule`}
-          className="btn-yellow btn-yellow-text text-outline"
-        >
-          Schedule
-        </Link>
-
-        <Link
-          href={`/teams/${teamId}/in-progress`}
-          className="btn-yellow btn-yellow-text text-outline"
-        >
-          In Progress
-        </Link>
-
-        <Link
-          href={`/teams/${teamId}/completed`}
-          className="btn-yellow btn-yellow-text text-outline"
-        >
-          Completed
-        </Link>
-
-        <Link
-          href={`/teams/${teamId}/players`}
-          className="btn-yellow btn-yellow-text text-outline"
-        >
-          Players
-        </Link>
-      </div>
-
-      {/* Placeholder Card */}
-      <div className="card">
-        <div className="muted">
-          Team overview and quick stats will live here later (record, trends,
-          top actions, etc.).
+      <div
+        style={{
+          marginTop: 16,
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 14,
+          padding: 16,
+        }}
+      >
+        <div style={{ fontWeight: 950, marginBottom: 8 }}>
+          Team overview (coming soon)
         </div>
+        <div style={{ opacity: 0.85 }}>
+          Record, trends, top actions, and player leaders will live here.
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Link href={`/teams/${teamId}/schedule`} style={btn}>
+          Go to Schedule →
+        </Link>
+        <Link href={`/teams/${teamId}/in-progress`} style={btn}>
+          Go to In Progress →
+        </Link>
+        <Link href={`/teams/${teamId}/completed`} style={btn}>
+          Go to Completed →
+        </Link>
+        <Link href={`/teams/${teamId}/players`} style={btn}>
+          Go to Players →
+        </Link>
       </div>
     </div>
   );
 }
+
+const btn: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 12,
+  fontWeight: 950,
+  border: "1px solid rgba(255,255,255,0.18)",
+  textDecoration: "none",
+  color: "inherit",
+};
