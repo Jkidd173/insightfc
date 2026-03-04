@@ -1,128 +1,75 @@
-"use client";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 
-// app/(app)/teams/create/page.tsx
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+export default async function CreateTeamPage() {
+  const supabase = createServerComponentClient({ cookies });
 
-export default function CreateTeamPage() {
-  const router = useRouter();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  const [name, setName] = useState("");
-  const [season, setSeason] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // If you're not logged in, send them to login
+  if (!session) redirect("/login");
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+  async function createTeam(formData: FormData) {
+    "use server";
 
-    const n = name.trim();
-    const s = season.trim();
+    const name = String(formData.get("name") ?? "").trim();
+    const season = String(formData.get("season") ?? "").trim();
 
-    if (!n) return setError("Team name is required.");
-    if (!s) return setError("Season is required.");
+    if (!name || !season) return;
 
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("teams")
-        .insert([{ name: n, season: s }])
-        .select("id")
-        .single();
+    const supabaseServer = createServerComponentClient({ cookies });
 
-      if (error) throw error;
-      if (!data?.id) throw new Error("Team created but no id returned.");
+    const { error } = await supabaseServer
+      .from("teams")
+      .insert([{ name, season }]);
 
-      router.push(`/teams/${data.id}`);
-      router.refresh();
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to create team.");
-      setLoading(false);
+    if (error) {
+      // This will show up in Vercel logs if it fails
+      console.error("Create team error:", error);
+      throw new Error(error.message);
     }
+
+    redirect("/teams");
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+    <div className="mx-auto max-w-xl p-6">
+      <h1 className="text-3xl font-bold mb-2">Create Team</h1>
+      <p className="text-white/70 mb-6">
+        Create a team, then schedule games and tag events.
+      </p>
+
+      <form action={createTeam} className="space-y-4">
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 950, margin: 0 }}>
-            Create Team
-          </h1>
-          <div style={{ opacity: 0.85, marginTop: 6 }}>
-            Create a team, then schedule games and tag events.
-          </div>
+          <label className="block text-sm mb-1">Team name</label>
+          <input
+            name="name"
+            className="w-full rounded-md border border-white/20 bg-black px-3 py-2"
+            placeholder="2016G Pre-GAA"
+            required
+          />
         </div>
 
-        <Link href="/teams" style={secondaryLink}>
-          Back to Teams
-        </Link>
-      </div>
-
-      <form
-        onSubmit={onSubmit}
-        style={{
-          marginTop: 16,
-          display: "grid",
-          gap: 12,
-          border: "1px solid rgba(255,255,255,0.15)",
-          borderRadius: 14,
-          padding: 16,
-        }}
-      >
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontWeight: 900 }}>Team name</span>
+        <div>
+          <label className="block text-sm mb-1">Season</label>
           <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="2016 Boys White"
-            style={inputStyle}
-          />
-        </label>
-
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontWeight: 900 }}>Season</span>
-          <input
-            value={season}
-            onChange={(e) => setSeason(e.target.value)}
+            name="season"
+            className="w-full rounded-md border border-white/20 bg-black px-3 py-2"
             placeholder="Spring 2026"
-            style={inputStyle}
+            required
           />
-        </label>
+        </div>
 
-        {error && <div style={{ color: "#ff6666", fontWeight: 950 }}>{error}</div>}
-
-        <button type="submit" disabled={loading} style={primaryBtn}>
-          {loading ? "Creating..." : "Create Team"}
+        <button
+          type="submit"
+          className="w-full rounded-md border border-white/20 bg-white/10 py-2 font-semibold"
+        >
+          Create Team
         </button>
       </form>
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: 10,
-  borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "transparent",
-  color: "inherit",
-};
-
-const primaryBtn: React.CSSProperties = {
-  padding: 12,
-  borderRadius: 12,
-  fontWeight: 950,
-  cursor: "pointer",
-  border: "1px solid rgba(255,255,255,0.2)",
-};
-
-const secondaryLink: React.CSSProperties = {
-  alignSelf: "center",
-  padding: "10px 12px",
-  borderRadius: 12,
-  fontWeight: 900,
-  textDecoration: "none",
-  border: "1px solid rgba(255,255,255,0.2)",
-  color: "inherit",
-};
