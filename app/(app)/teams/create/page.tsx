@@ -1,33 +1,28 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function CreateTeamPage() {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = createSupabaseServerClient();
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // If you're not logged in, send them to login
-  if (!session) redirect("/login");
+  // If not logged in, send to login
+  if (!user) redirect("/login");
 
   async function createTeam(formData: FormData) {
     "use server";
 
     const name = String(formData.get("name") ?? "").trim();
     const season = String(formData.get("season") ?? "").trim();
-
     if (!name || !season) return;
 
-    const supabaseServer = createServerComponentClient({ cookies });
+    const supabaseServer = createSupabaseServerClient();
 
     const { error } = await supabaseServer
       .from("teams")
       .insert([{ name, season }]);
 
     if (error) {
-      // This will show up in Vercel logs if it fails
       console.error("Create team error:", error);
       throw new Error(error.message);
     }
