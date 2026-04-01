@@ -1,66 +1,68 @@
+// app/(app)/teams/create/page.tsx
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
-export default async function CreateTeamPage() {
-  const supabase = createSupabaseServerClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // If not logged in, send to login
-  if (!user) redirect("/login");
-
+export default function CreateTeamPage() {
   async function createTeam(formData: FormData) {
     "use server";
 
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      redirect("/login");
+    }
+
     const name = String(formData.get("name") ?? "").trim();
-    const season = String(formData.get("season") ?? "").trim();
-    if (!name || !season) return;
 
-    const supabaseServer = createSupabaseServerClient();
+    if (!name) {
+      redirect("/teams/create?error=missing-name");
+    }
 
-    const { error } = await supabaseServer
-      .from("teams")
-      .insert([{ name, season }]);
+    const { error } = await supabase.from("teams").insert({
+      name,
+    });
 
     if (error) {
-      console.error("Create team error:", error);
-      throw new Error(error.message);
+      console.error("Create team error:", error.message);
+      redirect(`/teams/create?error=${encodeURIComponent(error.message)}`);
     }
 
     redirect("/teams");
   }
 
   return (
-    <div className="mx-auto max-w-xl p-6">
-      <h1 className="text-3xl font-bold mb-2">Create Team</h1>
-      <p className="text-white/70 mb-6">
-        Create a team, then schedule games and tag events.
+    <div className="mx-auto max-w-2xl px-6 py-10">
+      <h1 className="text-3xl font-bold">Create Team</h1>
+      <p className="mt-2 text-sm text-white/70">
+        Add a new team to InsightFC.
       </p>
 
-      <form action={createTeam} className="space-y-4">
-        <div>
-          <label className="block text-sm mb-1">Team name</label>
+      <form
+        action={createTeam}
+        className="mt-8 space-y-6 rounded-2xl border border-white/10 p-6"
+      >
+        <div className="space-y-2">
+          <label htmlFor="name" className="block text-sm font-medium">
+            Team Name
+          </label>
           <input
+            id="name"
             name="name"
-            className="w-full rounded-md border border-white/20 bg-black px-3 py-2"
-            placeholder="2016G Pre-GAA"
+            type="text"
+            placeholder="2015 Boys Pre-Elite"
             required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1">Season</label>
-          <input
-            name="season"
-            className="w-full rounded-md border border-white/20 bg-black px-3 py-2"
-            placeholder="Spring 2026"
-            required
+            className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-white outline-none"
           />
         </div>
 
         <button
           type="submit"
-          className="w-full rounded-md border border-white/20 bg-white/10 py-2 font-semibold"
+          className="rounded-xl bg-yellow-400 px-5 py-3 font-semibold text-black"
         >
           Create Team
         </button>
