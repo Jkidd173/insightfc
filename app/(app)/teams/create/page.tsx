@@ -1,104 +1,113 @@
-// app/(app)/teams/create/page.tsx
+// app/(app)/teams/page.tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-type CreateTeamPageProps = {
-  searchParams?: Promise<{
-    error?: string;
-  }>;
+type TeamRow = {
+  id: string;
+  name: string | null;
+  created_at?: string | null;
 };
 
-export default async function CreateTeamPage({
-  searchParams,
-}: CreateTeamPageProps) {
-  const params = searchParams ? await searchParams : undefined;
-  const errorMessage = params?.error ?? "";
+export default async function TeamsPage() {
+  const supabase = await createClient();
 
-  async function createTeam(formData: FormData) {
-    "use server";
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      redirect("/login");
-    }
-
-    const name = String(formData.get("name") ?? "").trim();
-
-    if (!name) {
-      redirect("/teams/create?error=Please enter a team name");
-    }
-
-    const { data, error } = await supabase
-      .from("teams")
-      .insert({
-        name,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      console.error("Create team error:", error);
-      redirect(`/teams/create?error=${encodeURIComponent(error.message)}`);
-    }
-
-    if (!data?.id) {
-      redirect("/teams/create?error=Team was not created correctly");
-    }
-
-    redirect(`/teams/${data.id}`);
+  if (userError || !user) {
+    redirect("/login");
   }
 
+  const { data: teams, error: teamsError } = await supabase
+    .from("teams")
+    .select("id, name, created_at")
+    .order("created_at", { ascending: false });
+
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <div className="mb-6">
-        <Link href="/teams" className="text-sm text-white/70 hover:text-white">
-          ← Back to Teams
-        </Link>
-      </div>
-
-      <h1 className="text-3xl font-bold">Create Team</h1>
-      <p className="mt-2 text-sm text-white/70">
-        Add a new team to InsightFC.
-      </p>
-
-      {errorMessage ? (
-        <div className="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {errorMessage}
-        </div>
-      ) : null}
-
-      <form
-        action={createTeam}
-        className="mt-8 space-y-6 rounded-2xl border border-white/10 p-6"
-      >
-        <div className="space-y-2">
-          <label htmlFor="name" className="block text-sm font-medium">
-            Team Name
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            placeholder="2015 Boys Pre-Elite"
-            required
-            className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-white outline-none"
-          />
+    <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className="mb-8 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Teams</h1>
+          <p className="mt-2 text-sm text-white/70">
+            Debug view for Supabase teams loading.
+          </p>
         </div>
 
-        <button
-          type="submit"
+        <Link
+          href="/teams/create"
           className="rounded-xl bg-yellow-400 px-5 py-3 font-semibold text-black"
         >
           Create Team
-        </button>
-      </form>
+        </Link>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-white/10 p-4">
+        <h2 className="text-lg font-semibold">Debug Info</h2>
+        <div className="mt-3 space-y-2 text-sm text-white/80">
+          <p>
+            <span className="font-semibold">Logged in user:</span>{" "}
+            {user.email ?? user.id}
+          </p>
+          <p>
+            <span className="font-semibold">User ID:</span> {user.id}
+          </p>
+          <p>
+            <span className="font-semibold">Teams error:</span>{" "}
+            {teamsError ? teamsError.message : "none"}
+          </p>
+          <p>
+            <span className="font-semibold">Teams count:</span>{" "}
+            {teams ? teams.length : 0}
+          </p>
+        </div>
+      </div>
+
+      {teamsError ? (
+        <div className="mb-6 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Failed to load teams: {teamsError.message}
+        </div>
+      ) : null}
+
+      <div className="mb-6 rounded-2xl border border-white/10 p-4">
+        <h2 className="text-lg font-semibold">Raw Teams Data</h2>
+        <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm text-white/70">
+          {JSON.stringify(teams, null, 2)}
+        </pre>
+      </div>
+
+      {teams && teams.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {teams.map((team: TeamRow) => (
+            <Link
+              key={team.id}
+              href={`/teams/${team.id}`}
+              className="block rounded-2xl border border-white/10 p-5 transition hover:border-white/30"
+            >
+              <h2 className="text-xl font-semibold">
+                {team.name || "Untitled Team"}
+              </h2>
+              <p className="mt-2 break-all text-sm text-white/60">
+                Team ID: {team.id}
+              </p>
+              {team.created_at ? (
+                <p className="mt-2 text-xs text-white/50">
+                  Created: {new Date(team.created_at).toLocaleString()}
+                </p>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 p-8 text-center">
+          <h2 className="text-xl font-semibold">No teams returned</h2>
+          <p className="mt-2 text-sm text-white/70">
+            This means the query returned an empty array.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
