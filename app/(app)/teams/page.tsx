@@ -1,164 +1,113 @@
-"use client";
-
 // app/(app)/teams/page.tsx
-import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-type Team = {
+type TeamRow = {
   id: string;
-  name: string;
-  season: string;
-  created_at?: string;
+  name: string | null;
+  created_at?: string | null;
 };
 
-export default function TeamsPage() {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default async function TeamsPage() {
+  const supabase = await createClient();
 
-  async function loadTeams() {
-    setError(null);
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("id,name,season,created_at")
-        .order("created_at", { ascending: false });
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-      if (error) throw error;
-      setTeams((data ?? []) as Team[]);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to load teams.");
-      setTeams([]);
-    } finally {
-      setLoading(false);
-    }
+  if (userError || !user) {
+    redirect("/login");
   }
 
-  useEffect(() => {
-    loadTeams();
-  }, []);
-
-  const content = useMemo(() => {
-    if (loading) return <div style={{ opacity: 0.85 }}>Loading teams...</div>;
-
-    if (error)
-      return (
-        <div style={{ color: "#ff6666", fontWeight: 900 }}>
-          {error}{" "}
-          <button
-            onClick={loadTeams}
-            style={{
-              marginLeft: 10,
-              padding: "6px 10px",
-              borderRadius: 10,
-              fontWeight: 900,
-              cursor: "pointer",
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      );
-
-    if (teams.length === 0)
-      return (
-        <div
-          style={{
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 14,
-            padding: 16,
-            marginTop: 12,
-          }}
-        >
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>No teams yet.</div>
-          <div style={{ opacity: 0.85, marginBottom: 12 }}>
-            Create a team to start scheduling games and tagging.
-          </div>
-          <Link href="/teams/create" style={primaryBtn}>
-            Create your first team
-          </Link>
-        </div>
-      );
-
-    return (
-      <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-        {teams.map((t) => (
-          <Link
-            key={t.id}
-            href={`/teams/${t.id}`}
-            style={{
-              textDecoration: "none",
-              color: "inherit",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 14,
-              padding: 14,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 950, fontSize: 18 }}>{t.name}</div>
-              <div style={{ opacity: 0.8 }}>{t.season}</div>
-            </div>
-
-            <div style={{ opacity: 0.7, fontWeight: 900 }}>Open →</div>
-          </Link>
-        ))}
-      </div>
-    );
-  }, [teams, loading, error]);
+  const { data: teams, error: teamsError } = await supabase
+    .from("teams")
+    .select("id, name, created_at")
+    .order("created_at", { ascending: false });
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className="mb-8 flex items-center justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: 30, fontWeight: 950, margin: 0 }}>Teams</h1>
-          <div style={{ opacity: 0.85 }}>
-            Your teams, schedules, tagging, and stats.
-          </div>
+          <h1 className="text-3xl font-bold">Teams</h1>
+          <p className="mt-2 text-sm text-white/70">
+            Debug view for Supabase teams loading.
+          </p>
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={loadTeams} style={secondaryBtn}>
-            Refresh
-          </button>
-          <Link href="/teams/create" style={primaryBtn}>
-            + Create Team
-          </Link>
+        <Link
+          href="/teams/create"
+          className="rounded-xl bg-yellow-400 px-5 py-3 font-semibold text-black"
+        >
+          Create Team
+        </Link>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-white/10 p-4">
+        <h2 className="text-lg font-semibold">Debug Info</h2>
+        <div className="mt-3 space-y-2 text-sm text-white/80">
+          <p>
+            <span className="font-semibold">Logged in user:</span>{" "}
+            {user.email ?? user.id}
+          </p>
+          <p>
+            <span className="font-semibold">User ID:</span> {user.id}
+          </p>
+          <p>
+            <span className="font-semibold">Teams error:</span>{" "}
+            {teamsError ? teamsError.message : "none"}
+          </p>
+          <p>
+            <span className="font-semibold">Teams count:</span>{" "}
+            {teams ? teams.length : 0}
+          </p>
         </div>
       </div>
 
-      {content}
+      {teamsError ? (
+        <div className="mb-6 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          Failed to load teams: {teamsError.message}
+        </div>
+      ) : null}
+
+      <div className="mb-6 rounded-2xl border border-white/10 p-4">
+        <h2 className="text-lg font-semibold">Raw Teams Data</h2>
+        <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm text-white/70">
+          {JSON.stringify(teams, null, 2)}
+        </pre>
+      </div>
+
+      {teams && teams.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {teams.map((team: TeamRow) => (
+            <Link
+              key={team.id}
+              href={`/teams/${team.id}`}
+              className="block rounded-2xl border border-white/10 p-5 transition hover:border-white/30"
+            >
+              <h2 className="text-xl font-semibold">
+                {team.name || "Untitled Team"}
+              </h2>
+              <p className="mt-2 break-all text-sm text-white/60">
+                Team ID: {team.id}
+              </p>
+              {team.created_at ? (
+                <p className="mt-2 text-xs text-white/50">
+                  Created: {new Date(team.created_at).toLocaleString()}
+                </p>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 p-8 text-center">
+          <h2 className="text-xl font-semibold">No teams returned</h2>
+          <p className="mt-2 text-sm text-white/70">
+            This means the query returned an empty array.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
-
-const primaryBtn: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 12,
-  fontWeight: 950,
-  textDecoration: "none",
-  display: "inline-block",
-  border: "1px solid rgba(255,255,255,0.2)",
-};
-
-const secondaryBtn: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 12,
-  fontWeight: 900,
-  cursor: "pointer",
-  border: "1px solid rgba(255,255,255,0.2)",
-  background: "transparent",
-  color: "inherit",
-};
