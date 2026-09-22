@@ -11,6 +11,9 @@ type VideoPart = {
 export default function UploadMatchPage() {
   const [opponent, setOpponent] = useState("");
   const [matchDate, setMatchDate] = useState("");
+  const [environment, setEnvironment] = useState("Outdoor");
+  const [matchType, setMatchType] = useState("League");
+  const [location, setLocation] = useState("");
   const [halfLength, setHalfLength] = useState("30");
   const [videos, setVideos] = useState<VideoPart[]>([]);
   const [message, setMessage] = useState("");
@@ -48,7 +51,9 @@ export default function UploadMatchPage() {
   }
 
   function removeVideo(id: string) {
-    setVideos((current) => current.filter((video) => video.id !== id));
+    setVideos((current) =>
+      current.filter((video) => video.id !== id)
+    );
     setMessage("");
   }
 
@@ -87,23 +92,30 @@ export default function UploadMatchPage() {
       return;
     }
 
-    if (videos.length < 2) {
-      setMessage("Upload at least 2 match video files.");
+    if (!location.trim()) {
+      setMessage("Enter the match location.");
       return;
     }
 
-    const hasFirstHalf = videos.some(
-      (video) => video.half === "First Half"
-    );
-    const hasSecondHalf = videos.some(
-      (video) => video.half === "Second Half"
-    );
-
-    if (!hasFirstHalf || !hasSecondHalf) {
-      setMessage(
-        "Assign at least one video to the First Half and one to the Second Half."
-      );
+    if (videos.length < 1) {
+      setMessage("Upload at least 1 match video.");
       return;
+    }
+
+    if (videos.length > 1) {
+      const hasFirstHalf = videos.some(
+        (video) => video.half === "First Half"
+      );
+      const hasSecondHalf = videos.some(
+        (video) => video.half === "Second Half"
+      );
+
+      if (!hasFirstHalf || !hasSecondHalf) {
+        setMessage(
+          "Assign at least one video to the First Half and one to the Second Half."
+        );
+        return;
+      }
     }
 
     setMessage(
@@ -135,7 +147,9 @@ export default function UploadMatchPage() {
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 1
               </div>
-              <h2 className="mt-1 text-xl font-bold">Match Details</h2>
+              <h2 className="mt-1 text-xl font-bold">
+                Match Details
+              </h2>
             </div>
 
             <div className="space-y-5">
@@ -154,7 +168,9 @@ export default function UploadMatchPage() {
                 </span>
                 <input
                   value={opponent}
-                  onChange={(event) => setOpponent(event.target.value)}
+                  onChange={(event) =>
+                    setOpponent(event.target.value)
+                  }
                   placeholder="e.g. Riverside U10"
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-yellow-400"
                 />
@@ -167,7 +183,63 @@ export default function UploadMatchPage() {
                 <input
                   type="date"
                   value={matchDate}
-                  onChange={(event) => setMatchDate(event.target.value)}
+                  onChange={(event) =>
+                    setMatchDate(event.target.value)
+                  }
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-yellow-400"
+                />
+              </label>
+
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-zinc-300">
+                  Environment
+                </span>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {["Outdoor", "Indoor"].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setEnvironment(option)}
+                      className={`rounded-xl border px-4 py-3 text-sm font-bold transition ${
+                        environment === option
+                          ? "border-yellow-400 bg-yellow-400 text-black"
+                          : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-600"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-zinc-300">
+                  Match Type
+                </span>
+                <select
+                  value={matchType}
+                  onChange={(event) =>
+                    setMatchType(event.target.value)
+                  }
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-yellow-400"
+                >
+                  <option value="League">League</option>
+                  <option value="Tournament">Tournament</option>
+                  <option value="Scrimmage">Scrimmage</option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-zinc-300">
+                  Location
+                </span>
+                <input
+                  value={location}
+                  onChange={(event) =>
+                    setLocation(event.target.value)
+                  }
+                  placeholder="e.g. Oakland Yard"
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-yellow-400"
                 />
               </label>
@@ -178,7 +250,9 @@ export default function UploadMatchPage() {
                 </span>
                 <select
                   value={halfLength}
-                  onChange={(event) => setHalfLength(event.target.value)}
+                  onChange={(event) =>
+                    setHalfLength(event.target.value)
+                  }
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none transition focus:border-yellow-400"
                 >
                   <option value="20">20 minutes</option>
@@ -191,9 +265,14 @@ export default function UploadMatchPage() {
               </label>
 
               <div className="rounded-xl border border-zinc-800 bg-black p-4">
-                <div className="text-sm font-semibold">Match Format</div>
+                <div className="text-sm font-semibold">
+                  Match Format
+                </div>
                 <div className="mt-1 text-sm text-zinc-400">
                   2 halves • {halfLength} minutes each
+                </div>
+                <div className="mt-1 text-xs text-zinc-500">
+                  {environment} • {matchType}
                 </div>
               </div>
             </div>
@@ -205,7 +284,9 @@ export default function UploadMatchPage() {
                 <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                   Step 2
                 </div>
-                <h2 className="mt-1 text-xl font-bold">Match Videos</h2>
+                <h2 className="mt-1 text-xl font-bold">
+                  Match Videos
+                </h2>
               </div>
 
               <div className="text-right text-xs text-zinc-500">
@@ -222,8 +303,8 @@ export default function UploadMatchPage() {
               <div className="font-bold">Add Match Videos</div>
 
               <div className="mt-2 max-w-sm text-sm leading-5 text-zinc-500">
-                Select 2–4 original videos from your phone or XbotGo.
-                You do not need to combine them first.
+                Select 1–4 original videos from your phone or XbotGo.
+                You do not need to combine multiple files first.
               </div>
 
               <input
@@ -259,11 +340,17 @@ export default function UploadMatchPage() {
                           {video.file.name}
                         </div>
                         <div className="mt-1 text-xs text-zinc-500">
-                          {(video.file.size / 1024 / 1024).toFixed(0)} MB
+                          {(
+                            video.file.size /
+                            1024 /
+                            1024
+                          ).toFixed(0)}{" "}
+                          MB
                         </div>
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => removeVideo(video.id)}
                         className="text-xs font-semibold text-zinc-500 hover:text-white"
                       >
@@ -271,39 +358,43 @@ export default function UploadMatchPage() {
                       </button>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <select
-                        value={video.half}
-                        onChange={(event) =>
-                          changeHalf(
-                            video.id,
-                            event.target.value as
-                              | "First Half"
-                              | "Second Half"
-                          )
-                        }
-                        className="rounded-lg border border-zinc-700 bg-black px-3 py-2 text-xs font-semibold outline-none focus:border-yellow-400"
-                      >
-                        <option>First Half</option>
-                        <option>Second Half</option>
-                      </select>
+                    {videos.length > 1 && (
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <select
+                          value={video.half}
+                          onChange={(event) =>
+                            changeHalf(
+                              video.id,
+                              event.target.value as
+                                | "First Half"
+                                | "Second Half"
+                            )
+                          }
+                          className="rounded-lg border border-zinc-700 bg-black px-3 py-2 text-xs font-semibold outline-none focus:border-yellow-400"
+                        >
+                          <option>First Half</option>
+                          <option>Second Half</option>
+                        </select>
 
-                      <button
-                        onClick={() => moveVideo(index, -1)}
-                        disabled={index === 0}
-                        className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
-                      >
-                        Move Up
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => moveVideo(index, -1)}
+                          disabled={index === 0}
+                          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
+                        >
+                          Move Up
+                        </button>
 
-                      <button
-                        onClick={() => moveVideo(index, 1)}
-                        disabled={index === videos.length - 1}
-                        className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
-                      >
-                        Move Down
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => moveVideo(index, 1)}
+                          disabled={index === videos.length - 1}
+                          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
+                        >
+                          Move Down
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -311,11 +402,12 @@ export default function UploadMatchPage() {
 
             <div className="mt-6 rounded-xl border border-zinc-800 bg-black p-4">
               <div className="text-sm font-semibold text-zinc-200">
-                No iMovie required.
+                One video or multiple files — both work.
               </div>
               <p className="mt-1 text-xs leading-5 text-zinc-500">
-                InsightFC is being designed to handle the separate recordings
-                as one match, including small gaps between video files.
+                If your camera creates multiple recordings, InsightFC is
+                designed to treat them as one match, including small gaps
+                between files.
               </p>
             </div>
           </section>
@@ -327,15 +419,17 @@ export default function UploadMatchPage() {
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 3
               </div>
-              <h2 className="mt-1 text-xl font-bold">Process Match</h2>
+              <h2 className="mt-1 text-xl font-bold">
+                Process Match
+              </h2>
               <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-                Once connected to the analysis engine, InsightFC will process
-                these videos into player actions, stats, timestamps, and match
-                clips.
+                InsightFC will process the match into player actions,
+                stats, timestamps, and video clips.
               </p>
             </div>
 
             <button
+              type="button"
               onClick={processMatch}
               className="shrink-0 rounded-xl bg-yellow-400 px-7 py-3.5 text-sm font-black text-black transition hover:bg-yellow-300"
             >
