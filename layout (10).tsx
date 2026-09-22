@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 
 const nav = [
-  ["Overview","/"],["My Teams","/teams"],["Help","/help"],["Settings","/settings"]
+  ["Overview","/"],["Teams","/teams"],["Help","/help"],["Settings","/settings"]
 ];
 export default function AppLayout({ children }: { children: React.ReactNode }) {
  return <div className="min-h-screen md:flex">

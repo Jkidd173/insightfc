@@ -11,7 +11,7 @@ type Team = {
 };
 
 export default function DashboardPage() {
-  const [teams, setMy Teams] = useState<Team[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
 
   useEffect(() => {
     try {
@@ -19,9 +19,9 @@ export default function DashboardPage() {
       if (!stored) return;
 
       const parsed = JSON.parse(stored);
-      setMy Teams(Array.isArray(parsed?.teams) ? parsed.teams : []);
+      setTeams(Array.isArray(parsed?.teams) ? parsed.teams : []);
     } catch {
-      setMy Teams([]);
+      setTeams([]);
     }
   }, []);
 
@@ -31,7 +31,7 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold">InsightFC</h1>
-          <p className="muted">My Teams, schedules, tagging, and stats — all in one place.</p>
+          <p className="muted">Teams, schedules, tagging, and stats — all in one place.</p>
         </div>
 
         <Link href="/teams/new" className="btn-yellow btn-yellow-text text-outline inline-flex items-center justify-center">
@@ -39,7 +39,7 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* My Teams List */}
+      {/* Teams List */}
       <div className="space-y-4">
         {teams.length === 0 ? (
           <div className="card">

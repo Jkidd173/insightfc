@@ -27,7 +27,7 @@ export default function TagLandingPage() {
           className="px-4 py-2 rounded-md border"
           onClick={() => router.push("/teams")}
         >
-          Go to My Teams
+          Go to Teams
         </button>
 
         <button

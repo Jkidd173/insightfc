@@ -189,8 +189,8 @@ function loadDB(): DBv1 {
 }
 
 export const db = {
-  // ---- My Teams ----
-  getMy Teams(): Team[] {
+  // ---- Teams ----
+  getTeams(): Team[] {
     return loadDB().teams;
   },
 

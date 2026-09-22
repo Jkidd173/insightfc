@@ -2,20 +2,10 @@
 
 InsightFC is designed first for highly engaged youth soccer coaches, especially U8-U12 coaches, who want to use match video and objective player actions to improve their teams and develop individual players.
 
-## Primary navigation
-Dashboard -> My Teams -> Games -> Players -> Analysis
+Primary experience: Dashboard -> My Teams -> Games -> Players -> Analysis.
 
-## Coach experience
-- Dashboard is personal to the signed-in coach, not a club administration console.
-- Coaches can manage one or multiple teams without enterprise club-management framing.
-- Upload & Analyze Game is the primary product action.
-- Team workspaces emphasize roster, games, team/player statistics, highlights, and development.
-- Player profiles emphasize understandable development statistics, trends, match history, and video.
-- Avoid arbitrary overall player ratings in the youth experience.
-- Keep advanced metrics extensible for later versions.
+Coaches may manage one or multiple teams, but the product should feel like a personal coaching and player-development workspace rather than club administration software. Upload & Analyze Game should become the primary action. Team and player experiences should emphasize games, understandable statistics, development trends, match video, and highlights.
 
-## Family/player experience
-A separate, simplified experience should expose the child's statistics, personal highlights, team highlights, and permitted full-game video without exposing coach/admin tools.
+The family/player experience should remain separate and simplified around the child's stats, personal highlights, team highlights, and permitted full-game video.
 
-## Audience
-The visual language should feel premium, credible, modern, and sports-technology focused. It should be appropriate for U8-U12 development without looking childish.
+The visual language should remain premium, modern, credible, and sports-technology focused without looking childish.

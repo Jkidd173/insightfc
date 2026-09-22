@@ -9,7 +9,7 @@ type TeamRow = {
   created_at?: string | null;
 };
 
-export default async function My TeamsPage() {
+export default async function TeamsPage() {
   const supabase = await createClient();
 
   const {
@@ -55,11 +55,11 @@ export default async function My TeamsPage() {
             <span className="font-semibold">User ID:</span> {user.id}
           </p>
           <p>
-            <span className="font-semibold">My Teams error:</span>{" "}
+            <span className="font-semibold">Teams error:</span>{" "}
             {teamsError ? teamsError.message : "none"}
           </p>
           <p>
-            <span className="font-semibold">My Teams count:</span>{" "}
+            <span className="font-semibold">Teams count:</span>{" "}
             {teams ? teams.length : 0}
           </p>
         </div>
@@ -72,7 +72,7 @@ export default async function My TeamsPage() {
       ) : null}
 
       <div className="mb-6 rounded-2xl border border-white/10 p-4">
-        <h2 className="text-lg font-semibold">Raw My Teams Data</h2>
+        <h2 className="text-lg font-semibold">Raw Teams Data</h2>
         <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-sm text-white/70">
           {JSON.stringify(teams, null, 2)}
         </pre>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 type TeamRow={id:string;name:string|null;season?:string|null;created_at?:string|null};
-export default async function My TeamsPage(){
+export default async function TeamsPage(){
  const supabase=await createClient(); const {data:{user},error:userError}=await supabase.auth.getUser();
  if(userError||!user) redirect("/login");
  const {data:teams,error}=await supabase.from("teams").select("id,name,season,created_at").order("created_at",{ascending:false});
