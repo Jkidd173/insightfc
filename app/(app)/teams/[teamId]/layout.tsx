@@ -1,73 +1,13 @@
 "use client";
-
-import React from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-
-function looksLikeUuid(v: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+import React from "react"; import Link from "next/link"; import {useParams,usePathname} from "next/navigation";
+export default function TeamLayout({children}:{children:React.ReactNode}){
+ const params=useParams(), pathname=usePathname(), teamId=(params?.teamId as string)||""; const base=`/teams/${teamId}`;
+ const tabs=[["Overview",base],["Schedule",`${base}/schedule`],["In progress",`${base}/in-progress`],["Completed",`${base}/completed`],["Players",`${base}/players`]];
+ return <div className="space-y-7">
+  <div><Link href="/teams" className="text-sm font-semibold text-zinc-500 no-underline hover:text-white">← All teams</Link>
+   <nav className="mt-5 flex gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-white/[.025] p-1.5">
+    {tabs.map(([label,href])=><Link key={href} href={href} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold no-underline transition ${pathname===href?"bg-yellow-400 text-black":"text-zinc-400 hover:bg-white/5 hover:text-white"}`}>{label}</Link>)}
+   </nav>
+  </div>{children}
+ </div>
 }
-
-export default function TeamLayout({ children }: { children: React.ReactNode }) {
-  const params = useParams();
-  const teamId = (params?.teamId as string | undefined) ?? "";
-
-  if (!looksLikeUuid(teamId)) {
-    return (
-      <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 26, fontWeight: 950, marginBottom: 8 }}>
-          Invalid Team Link
-        </h1>
-        <div style={{ opacity: 0.85, marginBottom: 14 }}>
-          That URL doesn’t contain a valid team id.
-        </div>
-        <Link href="/teams" style={btnStyle}>
-          Go to Teams
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-        <Link href={`/teams/${teamId}`} style={tabStyle}>
-          Team Home
-        </Link>
-        <Link href={`/teams/${teamId}/schedule`} style={tabStyle}>
-          Schedule
-        </Link>
-        <Link href={`/teams/${teamId}/in-progress`} style={tabStyle}>
-          In Progress
-        </Link>
-        <Link href={`/teams/${teamId}/completed`} style={tabStyle}>
-          Completed
-        </Link>
-        <Link href={`/teams/${teamId}/players`} style={tabStyle}>
-          Players
-        </Link>
-      </div>
-
-      {children}
-    </div>
-  );
-}
-
-const tabStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 12,
-  fontWeight: 950,
-  border: "1px solid rgba(255,255,255,0.18)",
-  textDecoration: "none",
-  color: "inherit",
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 12,
-  fontWeight: 950,
-  border: "1px solid rgba(255,255,255,0.18)",
-  textDecoration: "none",
-  color: "inherit",
-  display: "inline-block",
-};

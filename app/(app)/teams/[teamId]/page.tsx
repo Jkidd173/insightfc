@@ -1,128 +1,17 @@
 "use client";
-
-import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
-
-type Team = {
-  id: string;
-  name: string;
-  season: string;
-};
-
-export default function TeamHomePage() {
-  const params = useParams();
-  const teamId = (params?.teamId as string | undefined) ?? "";
-
-  const [team, setTeam] = useState<Team | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function loadTeam() {
-    setError(null);
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("id,name,season")
-        .eq("id", teamId)
-        .single();
-
-      if (error) throw error;
-      setTeam(data as Team);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to load team.");
-      setTeam(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!teamId) return;
-    loadTeam();
-  }, [teamId]);
-
-  if (!teamId) {
-    return <div style={{ padding: 24 }}>Missing team id.</div>;
-  }
-
-  if (loading) {
-    return <div style={{ padding: 24, opacity: 0.85 }}>Loading team…</div>;
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: 24 }}>
-        <div style={{ color: "#ff6666", fontWeight: 950 }}>{error}</div>
-        <button
-          onClick={loadTeam}
-          style={{
-            marginTop: 12,
-            padding: "10px 14px",
-            borderRadius: 12,
-            fontWeight: 900,
-            cursor: "pointer",
-            border: "1px solid rgba(255,255,255,0.2)",
-            background: "transparent",
-            color: "inherit",
-          }}
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (!team) {
-    return <div style={{ padding: 24 }}>Team not found.</div>;
-  }
-
-  return (
-    <div>
-      <h1 style={{ fontSize: 34, fontWeight: 950, margin: 0 }}>{team.name}</h1>
-      <div style={{ opacity: 0.85, marginTop: 6 }}>{team.season}</div>
-
-      <div
-        style={{
-          marginTop: 16,
-          border: "1px solid rgba(255,255,255,0.15)",
-          borderRadius: 14,
-          padding: 16,
-        }}
-      >
-        <div style={{ fontWeight: 950, marginBottom: 8 }}>
-          Team overview (coming soon)
-        </div>
-        <div style={{ opacity: 0.85 }}>
-          Record, trends, top actions, and player leaders will live here.
-        </div>
-      </div>
-
-      <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Link href={`/teams/${teamId}/schedule`} style={btn}>
-          Go to Schedule →
-        </Link>
-        <Link href={`/teams/${teamId}/in-progress`} style={btn}>
-          Go to In Progress →
-        </Link>
-        <Link href={`/teams/${teamId}/completed`} style={btn}>
-          Go to Completed →
-        </Link>
-        <Link href={`/teams/${teamId}/players`} style={btn}>
-          Go to Players →
-        </Link>
-      </div>
-    </div>
-  );
+import {useEffect,useState} from "react"; import {useParams} from "next/navigation"; import Link from "next/link"; import {supabase} from "@/lib/supabaseClient";
+type Team={id:string;name:string;season:string};
+export default function TeamHomePage(){
+ const {teamId}=useParams() as {teamId:string}; const [team,setTeam]=useState<Team|null>(null); const [loading,setLoading]=useState(true); const [error,setError]=useState<string|null>(null);
+ useEffect(()=>{(async()=>{try{const {data,error}=await supabase.from("teams").select("id,name,season").eq("id",teamId).single();if(error)throw error;setTeam(data as Team)}catch(e:any){setError(e?.message||"Failed to load team.")}finally{setLoading(false)}})()},[teamId]);
+ if(loading)return <div className="card text-zinc-400">Loading team workspace…</div>;
+ if(error||!team)return <div className="card border-red-500/20 text-red-300">{error||"Team not found."}</div>;
+ return <div className="space-y-7">
+  <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="eyebrow">Team workspace</div><h1 className="page-title mt-2">{team.name}</h1><p className="muted mt-2">{team.season||"Current season"} · Player development hub</p></div><Link href={`/teams/${teamId}/schedule`} className="btn-yellow">+ Schedule match</Link></header>
+  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+   {[["Players","Roster & profiles","Manage roster"],["Matches","Schedule & video","View schedule"],["Analysis","Player actions","Review games"],["Highlights","Players & team","Coming soon"]].map(([a,b,c])=><div className="stat-card" key={a}><p className="text-xs font-bold uppercase tracking-wider text-zinc-500">{a}</p><p className="mt-3 text-2xl font-bold">{b}</p><p className="mt-4 text-sm text-yellow-400">{c} →</p></div>)}
+  </div>
+  <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]"><section className="card"><div className="flex items-center justify-between"><div><p className="eyebrow">Development</p><h2 className="mt-2 text-xl font-bold">Team activity</h2></div><span className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-400">Season view</span></div><div className="mt-8 rounded-xl border border-dashed border-white/10 px-5 py-10 text-center"><p className="font-semibold">Your performance story starts here</p><p className="muted mx-auto mt-2 max-w-md text-sm">As matches are analyzed, touches, passing, carries, recoveries and other age-appropriate development stats will appear here.</p></div></section>
+  <aside className="card"><p className="eyebrow">Quick actions</p><div className="mt-4 space-y-2"><Link className="btn-ghost w-full justify-between" href={`/teams/${teamId}/players`}>Manage players <span>→</span></Link><Link className="btn-ghost w-full justify-between" href={`/teams/${teamId}/schedule`}>Schedule match <span>→</span></Link><Link className="btn-ghost w-full justify-between" href={`/teams/${teamId}/in-progress`}>Active analysis <span>→</span></Link><Link className="btn-ghost w-full justify-between" href={`/teams/${teamId}/completed`}>Match archive <span>→</span></Link></div></aside></div>
+ </div>
 }
-
-const btn: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 12,
-  fontWeight: 950,
-  border: "1px solid rgba(255,255,255,0.18)",
-  textDecoration: "none",
-  color: "inherit",
-};
