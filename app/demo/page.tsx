@@ -77,56 +77,188 @@ const actionExamples: Record<string, Action[]> = {
     { time: "08:42", detail: "Receives between opponents" },
     { time: "11:19", detail: "First-time control into space" },
     { time: "14:18", detail: "Receives near right channel" },
+    { time: "17:05", detail: "Receives facing own goal" },
+    { time: "19:46", detail: "Controls pass in midfield" },
+    { time: "23:12", detail: "Touch into attacking space" },
+    { time: "27:38", detail: "Receives under pressure" },
+    { time: "32:16", detail: "Controls loose ball" },
+    { time: "38:44", detail: "Receives near penalty area" },
   ],
 
   Passes: [
-    { time: "03:06", result: "Successful", detail: "Forward pass into midfield" },
-    { time: "05:44", result: "Successful", detail: "Short combination pass" },
-    { time: "09:12", result: "Unsuccessful", detail: "Attempted through ball" },
-    { time: "13:37", result: "Successful", detail: "Switches play to the right" },
-    { time: "18:02", result: "Successful", detail: "Pass into attacking third" },
-    { time: "24:16", result: "Unsuccessful", detail: "Forward pass intercepted" },
+    {
+      time: "03:06",
+      result: "Successful",
+      detail: "Forward pass into midfield",
+    },
+    {
+      time: "05:44",
+      result: "Successful",
+      detail: "Short combination pass",
+    },
+    {
+      time: "09:12",
+      result: "Unsuccessful",
+      detail: "Attempted through ball",
+    },
+    {
+      time: "13:37",
+      result: "Successful",
+      detail: "Switches play to the right",
+    },
+    {
+      time: "18:02",
+      result: "Successful",
+      detail: "Pass into attacking third",
+    },
+    {
+      time: "24:16",
+      result: "Unsuccessful",
+      detail: "Forward pass intercepted",
+    },
+    {
+      time: "28:41",
+      result: "Successful",
+      detail: "Pass through midfield pressure",
+    },
+    {
+      time: "34:09",
+      result: "Successful",
+      detail: "Final pass creates a chance",
+    },
   ],
 
   "Carries 10+ yd": [
-    { time: "06:08", result: "Successful", detail: "Carries forward through midfield" },
-    { time: "12:51", result: "Successful", detail: "Progressive carry into space" },
-    { time: "18:33", result: "Successful", detail: "Carries into attacking third" },
-    { time: "25:20", result: "Successful", detail: "Breaks pressure with the ball" },
-    { time: "31:07", result: "Successful", detail: "Carries down central channel" },
-    { time: "38:14", result: "Successful", detail: "Advances possession 10+ yards" },
+    {
+      time: "06:08",
+      result: "Successful",
+      detail: "Carries forward through midfield",
+    },
+    {
+      time: "12:51",
+      result: "Successful",
+      detail: "Progressive carry into space",
+    },
+    {
+      time: "18:33",
+      result: "Successful",
+      detail: "Carries into attacking third",
+    },
+    {
+      time: "25:20",
+      result: "Successful",
+      detail: "Breaks pressure with the ball",
+    },
+    {
+      time: "31:07",
+      result: "Successful",
+      detail: "Carries down central channel",
+    },
+    {
+      time: "38:14",
+      result: "Successful",
+      detail: "Advances possession 10+ yards",
+    },
   ],
 
   "Take-ons": [
-    { time: "08:42", result: "Successful", detail: "Beats defender in central midfield" },
-    { time: "14:18", result: "Unsuccessful", detail: "Defender wins challenge near touchline" },
-    { time: "21:07", result: "Successful", detail: "Gets past first defender on the dribble" },
-    { time: "29:33", result: "Successful", detail: "Changes direction and beats opponent" },
-    { time: "36:11", result: "Unsuccessful", detail: "Dribble stopped outside attacking third" },
-    { time: "43:26", result: "Successful", detail: "Beats defender before entering the box" },
+    {
+      time: "08:42",
+      result: "Successful",
+      detail: "Beats defender in central midfield",
+    },
+    {
+      time: "14:18",
+      result: "Unsuccessful",
+      detail: "Defender wins challenge near touchline",
+    },
+    {
+      time: "21:07",
+      result: "Successful",
+      detail: "Gets past first defender on the dribble",
+    },
+    {
+      time: "29:33",
+      result: "Successful",
+      detail: "Changes direction and beats opponent",
+    },
+    {
+      time: "36:11",
+      result: "Unsuccessful",
+      detail: "Dribble stopped outside attacking third",
+    },
+    {
+      time: "43:26",
+      result: "Successful",
+      detail: "Beats defender before entering the box",
+    },
   ],
 
   Shots: [
-    { time: "22:40", detail: "Right-footed shot from central area" },
-    { time: "43:31", result: "Successful", detail: "Shot resulting in goal" },
+    {
+      time: "22:40",
+      result: "Unsuccessful",
+      detail: "Right-footed shot from central area",
+    },
+    {
+      time: "43:31",
+      result: "Successful",
+      detail: "Shot resulting in goal",
+    },
   ],
 
   Goals: [
-    { time: "43:31", result: "Successful", detail: "Goal from inside the penalty area" },
+    {
+      time: "43:31",
+      result: "Successful",
+      detail: "Goal from inside the penalty area",
+    },
   ],
 
   Assists: [
-    { time: "34:09", result: "Successful", detail: "Final pass creates teammate goal" },
+    {
+      time: "34:09",
+      result: "Successful",
+      detail: "Final pass creates teammate goal",
+    },
   ],
 
   "Possession Won": [
-    { time: "04:52", result: "Successful", detail: "Wins loose ball in midfield" },
-    { time: "10:11", result: "Successful", detail: "Recovers possession after pressure" },
-    { time: "16:43", result: "Successful", detail: "Interception in central area" },
-    { time: "23:50", result: "Successful", detail: "Wins second ball" },
-    { time: "30:14", result: "Successful", detail: "Regains possession in midfield" },
-    { time: "37:02", result: "Successful", detail: "Tackles and recovers the ball" },
-    { time: "44:18", result: "Successful", detail: "Late recovery of possession" },
+    {
+      time: "04:52",
+      result: "Successful",
+      detail: "Wins loose ball in midfield",
+    },
+    {
+      time: "10:11",
+      result: "Successful",
+      detail: "Recovers possession after pressure",
+    },
+    {
+      time: "16:43",
+      result: "Successful",
+      detail: "Interception in central area",
+    },
+    {
+      time: "23:50",
+      result: "Successful",
+      detail: "Wins second ball",
+    },
+    {
+      time: "30:14",
+      result: "Successful",
+      detail: "Regains possession in midfield",
+    },
+    {
+      time: "37:02",
+      result: "Successful",
+      detail: "Tackles and recovers the ball",
+    },
+    {
+      time: "44:18",
+      result: "Successful",
+      detail: "Late recovery of possession",
+    },
   ],
 
   Pressures: [
@@ -136,6 +268,8 @@ const actionExamples: Record<string, Action[]> = {
     { time: "15:34", detail: "Closes passing lane" },
     { time: "19:52", detail: "Pressures opponent near touchline" },
     { time: "24:07", detail: "Counter-pressure after lost possession" },
+    { time: "28:19", detail: "Pressures opponent receiving centrally" },
+    { time: "32:48", detail: "Closes down ball carrier" },
   ],
 };
 
@@ -157,10 +291,14 @@ function StatCard({
       className={`rounded-xl border p-4 text-left transition ${
         active
           ? "border-yellow-400 bg-yellow-400/10"
-          : "border-white/10 bg-black/40 hover:border-yellow-400/60 hover:bg-black/60"
+          : "border-white/10 bg-black/40 hover:border-yellow-400/60"
       }`}
     >
-      <div className={active ? "text-xl font-bold text-yellow-400" : "text-xl font-bold text-white"}>
+      <div
+        className={`text-xl font-bold ${
+          active ? "text-yellow-400" : "text-white"
+        }`}
+      >
         {value}
       </div>
 
@@ -169,21 +307,26 @@ function StatCard({
       </div>
 
       <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-yellow-400">
-        View actions →
+        {active ? "Reviewing ↑" : "View actions →"}
       </div>
     </button>
   );
 }
 
-function ActionPanel({
+function ActionReview({
   stat,
   onClose,
 }: {
   stat: string;
   onClose: () => void;
 }) {
-  const [filter, setFilter] = useState("All");
   const actions = actionExamples[stat] || [];
+
+  const [filter, setFilter] = useState<
+    "All" | "Successful" | "Unsuccessful"
+  >("All");
+
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   const hasResults = actions.some((action) => action.result);
 
@@ -192,109 +335,209 @@ function ActionPanel({
       ? actions
       : actions.filter((action) => action.result === filter);
 
+  const selectedAction =
+    filteredActions[selectedIndex] || filteredActions[0];
+
+  function changeFilter(
+    newFilter: "All" | "Successful" | "Unsuccessful"
+  ) {
+    setFilter(newFilter);
+    setSelectedIndex(0);
+  }
+
   return (
-    <div className="mt-4 rounded-2xl border border-yellow-400/30 bg-black/40 p-5">
-      <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-4 sm:flex-row sm:items-center">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-yellow-400">
-            Action Review
-          </p>
+    <div className="mt-5 overflow-hidden rounded-2xl border border-yellow-400/30 bg-[#0b0e13]">
+      <div className="border-b border-white/10 p-5">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-yellow-400">
+              Action Review
+            </p>
 
-          <h4 className="mt-1 text-lg font-bold">{stat}</h4>
+            <div className="mt-1 flex items-center gap-3">
+              <h4 className="text-xl font-bold">{stat}</h4>
 
-          <p className="mt-1 text-xs text-zinc-500">
-            Click any moment to review the action with match context.
-          </p>
+              <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-400">
+                {actions.length} demo actions
+              </span>
+            </div>
+
+            <p className="mt-1 text-xs text-zinc-500">
+              Select a timestamp to review that moment.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="self-start rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-zinc-400 transition hover:border-white/30 hover:text-white"
+          >
+            Close
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="self-start rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-zinc-400 hover:text-white"
-        >
-          Close
-        </button>
+        {hasResults && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(
+              ["All", "Successful", "Unsuccessful"] as const
+            ).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => changeFilter(option)}
+                className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                  filter === option
+                    ? "bg-yellow-400 text-black"
+                    : "bg-zinc-800 text-zinc-400 hover:text-white"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {hasResults && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {["All", "Successful", "Unsuccessful"].map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setFilter(option)}
-              className={`rounded-full px-4 py-2 text-xs font-bold ${
-                filter === option
-                  ? "bg-yellow-400 text-black"
-                  : "bg-zinc-800 text-zinc-400 hover:text-white"
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex min-h-[420px] flex-col md:flex-row">
+        {/* LEFT SIDEBAR */}
+        <div className="order-2 border-t border-white/10 md:order-1 md:w-[32%] md:border-r md:border-t-0">
+          <div className="border-b border-white/10 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+              Match Timeline
+            </p>
+          </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        {filteredActions.map((action, index) => (
-          <button
-            key={`${action.time}-${index}`}
-            type="button"
-            className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900 text-left transition hover:border-yellow-400/50"
-          >
-            <div className="flex h-32 items-center justify-center bg-black/60">
-              <div className="text-center">
-                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-yellow-400 font-black text-black">
-                  ▶
+          <div className="max-h-[420px] overflow-y-auto">
+            {filteredActions.map((action, index) => {
+              const active = index === selectedIndex;
+
+              return (
+                <button
+                  key={`${action.time}-${index}`}
+                  type="button"
+                  onClick={() => setSelectedIndex(index)}
+                  className={`w-full border-b border-white/5 p-4 text-left transition ${
+                    active
+                      ? "border-l-4 border-l-yellow-400 bg-yellow-400/10"
+                      : "border-l-4 border-l-transparent hover:bg-white/5"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`text-sm font-bold ${
+                        active ? "text-yellow-400" : "text-white"
+                      }`}
+                    >
+                      {action.time}
+                    </span>
+
+                    {action.result && (
+                      <span
+                        className={`text-[10px] font-bold uppercase ${
+                          action.result === "Successful"
+                            ? "text-yellow-400"
+                            : "text-zinc-500"
+                        }`}
+                      >
+                        {action.result === "Successful" ? "✓" : "✕"}{" "}
+                        {action.result}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                    {action.detail}
+                  </p>
+                </button>
+              );
+            })}
+
+            {filteredActions.length === 0 && (
+              <div className="p-6 text-center text-sm text-zinc-500">
+                No actions match this filter.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* VIDEO PLAYER */}
+        <div className="order-1 flex flex-1 flex-col md:order-2">
+          <div className="flex min-h-[320px] flex-1 items-center justify-center bg-black p-6">
+            {selectedAction ? (
+              <div className="w-full text-center">
+                <div className="mx-auto flex aspect-video w-full max-w-3xl items-center justify-center rounded-xl border border-white/10 bg-[#050608] shadow-2xl">
+                  <div>
+                    <button
+                      type="button"
+                      className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-yellow-400 text-2xl font-black text-black transition hover:scale-105"
+                    >
+                      ▶
+                    </button>
+
+                    <p className="mt-5 text-xs font-bold uppercase tracking-wider text-zinc-500">
+                      Match Video
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Select an action to review.
+              </p>
+            )}
+          </div>
+
+          {selectedAction && (
+            <div className="border-t border-white/10 bg-zinc-900/70 p-5">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-black text-yellow-400">
+                      {selectedAction.time}
+                    </span>
+
+                    {selectedAction.result && (
+                      <span
+                        className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${
+                          selectedAction.result === "Successful"
+                            ? "bg-yellow-400/15 text-yellow-400"
+                            : "bg-white/10 text-zinc-400"
+                        }`}
+                      >
+                        {selectedAction.result === "Successful"
+                          ? "✓ "
+                          : "✕ "}
+                        {selectedAction.result}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-2 text-sm text-zinc-300">
+                    {selectedAction.detail}
+                  </p>
                 </div>
 
-                <p className="mt-2 text-[10px] uppercase tracking-wider text-zinc-500">
-                  5 sec before • Action • 5 sec after
-                </p>
+                <div className="rounded-lg bg-black/40 px-4 py-3 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Clip Window
+                  </p>
+
+                  <p className="mt-1 text-xs text-white">
+                    5 sec before • Action • 5 sec after
+                  </p>
+                </div>
               </div>
             </div>
-
-            <div className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-bold text-white">
-                  {action.time}
-                </span>
-
-                {action.result && (
-                  <span
-                    className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${
-                      action.result === "Successful"
-                        ? "bg-yellow-400/15 text-yellow-400"
-                        : "bg-white/10 text-zinc-400"
-                    }`}
-                  >
-                    {action.result === "Successful" ? "✓ " : "✕ "}
-                    {action.result}
-                  </span>
-                )}
-              </div>
-
-              <p className="mt-2 text-sm text-zinc-400">
-                {action.detail}
-              </p>
-
-              <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-yellow-400">
-                Watch clip →
-              </p>
-            </div>
-          </button>
-        ))}
+          )}
+        </div>
       </div>
 
-      {filteredActions.length === 0 && (
-        <div className="mt-5 rounded-xl bg-zinc-900 p-6 text-center text-sm text-zinc-500">
-          No actions match this filter.
-        </div>
-      )}
-
-      <p className="mt-4 text-[11px] text-zinc-600">
-        Demo action data. Final clips will be generated from the analyzed match video.
-      </p>
+      <div className="border-t border-white/10 px-5 py-3">
+        <p className="text-[10px] text-zinc-600">
+          Demo action data. Final timestamps and video moments will come
+          from the analyzed match.
+        </p>
+      </div>
     </div>
   );
 }
@@ -312,9 +555,9 @@ function StatSection({
   activeStat: string | null;
   onStatClick: (label: string) => void;
 }) {
-  const sectionLabels = stats.map((stat) => stat.label);
-  const showPanel =
-    activeStat !== null && sectionLabels.includes(activeStat);
+  const labels = stats.map((stat) => stat.label);
+  const showReview =
+    activeStat !== null && labels.includes(activeStat);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-zinc-900/60 p-5">
@@ -338,8 +581,8 @@ function StatSection({
         ))}
       </div>
 
-      {showPanel && activeStat && (
-        <ActionPanel
+      {showReview && activeStat && (
+        <ActionReview
           key={activeStat}
           stat={activeStat}
           onClose={() => onStatClick(activeStat)}
@@ -359,7 +602,9 @@ export default function DemoPage() {
   }
 
   function handleStatClick(label: string) {
-    setActiveStat((current) => (current === label ? null : label));
+    setActiveStat((current) =>
+      current === label ? null : label
+    );
   }
 
   return (
@@ -374,7 +619,9 @@ export default function DemoPage() {
             InsightFC Coach Dashboard
           </p>
 
-          <h1 className="mt-2 text-4xl font-bold">Northside U10</h1>
+          <h1 className="mt-2 text-4xl font-bold">
+            Northside U10
+          </h1>
 
           <p className="mt-2 text-sm text-zinc-500">
             Demo team • Player development and match analysis
@@ -393,6 +640,7 @@ export default function DemoPage() {
               className="rounded-2xl border border-white/10 bg-zinc-900 p-5"
             >
               <div className="text-3xl font-bold">{value}</div>
+
               <div className="mt-1 text-xs uppercase tracking-wider text-zinc-500">
                 {label}
               </div>
@@ -423,8 +671,12 @@ export default function DemoPage() {
                 ["33", "Possession Won"],
                 ["46", "Pressures"],
               ].map(([value, label]) => (
-                <div key={label} className="rounded-xl bg-black/40 px-4 py-3">
+                <div
+                  key={label}
+                  className="rounded-xl bg-black/40 px-4 py-3"
+                >
                   <div className="font-bold">{value}</div>
+
                   <div className="mt-1 text-[10px] uppercase tracking-wider text-zinc-500">
                     {label}
                   </div>
@@ -463,7 +715,9 @@ export default function DemoPage() {
                   <div className="flex items-center justify-between">
                     <span
                       className={`text-2xl font-black ${
-                        active ? "text-yellow-400" : "text-zinc-500"
+                        active
+                          ? "text-yellow-400"
+                          : "text-zinc-500"
                       }`}
                     >
                       #{player.number}
@@ -474,8 +728,13 @@ export default function DemoPage() {
                     </span>
                   </div>
 
-                  <div className="mt-4 font-bold">{player.name}</div>
-                  <div className="mt-1 text-xs text-zinc-500">U10</div>
+                  <div className="mt-4 font-bold">
+                    {player.name}
+                  </div>
+
+                  <div className="mt-1 text-xs text-zinc-500">
+                    U10
+                  </div>
                 </button>
               );
             })}
@@ -488,7 +747,9 @@ export default function DemoPage() {
               Player Match Report
             </p>
 
-            <h2 className="mt-2 text-2xl font-bold">{selected.name}</h2>
+            <h2 className="mt-2 text-2xl font-bold">
+              {selected.name}
+            </h2>
 
             <p className="mt-2 text-sm text-zinc-500">
               Latest match vs Riverside U10
@@ -502,10 +763,22 @@ export default function DemoPage() {
               activeStat={activeStat}
               onStatClick={handleStatClick}
               stats={[
-                { label: "Touches", value: selected.touches },
-                { label: "Passes", value: selected.passes },
-                { label: "Carries 10+ yd", value: selected.carries },
-                { label: "Take-ons", value: selected.takeons },
+                {
+                  label: "Touches",
+                  value: selected.touches,
+                },
+                {
+                  label: "Passes",
+                  value: selected.passes,
+                },
+                {
+                  label: "Carries 10+ yd",
+                  value: selected.carries,
+                },
+                {
+                  label: "Take-ons",
+                  value: selected.takeons,
+                },
               ]}
             />
 
@@ -515,9 +788,18 @@ export default function DemoPage() {
               activeStat={activeStat}
               onStatClick={handleStatClick}
               stats={[
-                { label: "Shots", value: selected.shots },
-                { label: "Goals", value: selected.goals },
-                { label: "Assists", value: selected.assists },
+                {
+                  label: "Shots",
+                  value: selected.shots,
+                },
+                {
+                  label: "Goals",
+                  value: selected.goals,
+                },
+                {
+                  label: "Assists",
+                  value: selected.assists,
+                },
               ]}
             />
 
@@ -527,8 +809,14 @@ export default function DemoPage() {
               activeStat={activeStat}
               onStatClick={handleStatClick}
               stats={[
-                { label: "Possession Won", value: selected.won },
-                { label: "Pressures", value: selected.pressures },
+                {
+                  label: "Possession Won",
+                  value: selected.won,
+                },
+                {
+                  label: "Pressures",
+                  value: selected.pressures,
+                },
               ]}
             />
           </div>
@@ -541,7 +829,10 @@ export default function DemoPage() {
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-400 text-lg font-black text-black">
                   ▶
                 </div>
-                <p className="mt-3 text-xs text-zinc-500">Video preview</p>
+
+                <p className="mt-3 text-xs text-zinc-500">
+                  Video preview
+                </p>
               </div>
             </div>
 
@@ -549,11 +840,9 @@ export default function DemoPage() {
               Match Highlights
             </p>
 
-            <h3 className="mt-2 text-xl font-bold">Team Highlight Reel</h3>
-
-            <p className="mt-2 text-sm text-zinc-500">
-              Review key attacking and defensive moments from the match.
-            </p>
+            <h3 className="mt-2 text-xl font-bold">
+              Team Highlight Reel
+            </h3>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-zinc-900 p-6">
@@ -562,7 +851,10 @@ export default function DemoPage() {
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-400 text-lg font-black text-black">
                   ▶
                 </div>
-                <p className="mt-3 text-xs text-zinc-500">Video preview</p>
+
+                <p className="mt-3 text-xs text-zinc-500">
+                  Video preview
+                </p>
               </div>
             </div>
 
@@ -573,10 +865,6 @@ export default function DemoPage() {
             <h3 className="mt-2 text-xl font-bold">
               {selected.name} Highlights
             </h3>
-
-            <p className="mt-2 text-sm text-zinc-500">
-              Watch selected moments from this player&apos;s match.
-            </p>
           </div>
         </section>
 
@@ -585,7 +873,9 @@ export default function DemoPage() {
             Full Match
           </p>
 
-          <p className="mt-2 font-bold">Watch Full Match</p>
+          <p className="mt-2 font-bold">
+            Watch Full Match
+          </p>
 
           <p className="mt-1 text-xs text-zinc-500">
             Review the complete match video and surrounding context.
