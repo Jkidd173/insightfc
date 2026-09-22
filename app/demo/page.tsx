@@ -273,6 +273,44 @@ const actionExamples: Record<string, Action[]> = {
   ],
 };
 
+function getActionTotal(stat: string, player: Player) {
+  switch (stat) {
+    case "Touches":
+      return player.touches;
+
+    case "Passes": {
+      const parts = player.passes.split("/");
+      return Number(parts[1]) || 0;
+    }
+
+    case "Carries 10+ yd":
+      return player.carries;
+
+    case "Take-ons": {
+      const parts = player.takeons.split("/");
+      return Number(parts[1]) || 0;
+    }
+
+    case "Shots":
+      return player.shots;
+
+    case "Goals":
+      return player.goals;
+
+    case "Assists":
+      return player.assists;
+
+    case "Possession Won":
+      return player.won;
+
+    case "Pressures":
+      return player.pressures;
+
+    default:
+      return 0;
+  }
+}
+
 function StatCard({
   label,
   value,
@@ -291,11 +329,11 @@ function StatCard({
       className={`rounded-xl border p-4 text-left transition ${
         active
           ? "border-yellow-400 bg-yellow-400/10"
-          : "border-white/10 bg-black/40 hover:border-yellow-400/60"
+          : "border-white/10 bg-black/30 hover:border-yellow-400/50 hover:bg-black/50"
       }`}
     >
       <div
-        className={`text-xl font-bold ${
+        className={`text-xl font-black ${
           active ? "text-yellow-400" : "text-white"
         }`}
       >
@@ -315,9 +353,11 @@ function StatCard({
 
 function ActionReview({
   stat,
+  player,
   onClose,
 }: {
   stat: string;
+  player: Player;
   onClose: () => void;
 }) {
   const actions = actionExamples[stat] || [];
@@ -338,6 +378,8 @@ function ActionReview({
   const selectedAction =
     filteredActions[selectedIndex] || filteredActions[0];
 
+  const actionTotal = getActionTotal(stat, player);
+
   function changeFilter(
     newFilter: "All" | "Successful" | "Unsuccessful"
   ) {
@@ -346,46 +388,41 @@ function ActionReview({
   }
 
   return (
-    <div className="mt-5 overflow-hidden rounded-2xl border border-yellow-400/30 bg-[#0b0e13]">
-      <div className="border-b border-white/10 p-5">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
+    <div className="mt-5 overflow-hidden rounded-xl border border-yellow-400/30 bg-[#090b0f]">
+      {/* HEADER */}
+      <div className="flex flex-col gap-4 border-b border-white/10 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-yellow-400">
               Action Review
             </p>
 
-            <div className="mt-1 flex items-center gap-3">
-              <h4 className="text-xl font-bold">{stat}</h4>
+            <span className="text-zinc-700">•</span>
 
-              <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-400">
-                {actions.length} demo actions
-              </span>
-            </div>
-
-            <p className="mt-1 text-xs text-zinc-500">
-              Select a timestamp to review that moment.
+            <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+              {stat}
             </p>
+
+            <span className="rounded-full bg-yellow-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-yellow-400">
+              {actionTotal} Actions
+            </span>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="self-start rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-zinc-400 transition hover:border-white/30 hover:text-white"
-          >
-            Close
-          </button>
+          <p className="mt-2 text-xs text-zinc-500">
+            Select a timestamp to review that moment in the match.
+          </p>
         </div>
 
-        {hasResults && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(
+        <div className="flex flex-wrap items-center gap-2">
+          {hasResults &&
+            (
               ["All", "Successful", "Unsuccessful"] as const
             ).map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => changeFilter(option)}
-                className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                className={`rounded-full px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
                   filter === option
                     ? "bg-yellow-400 text-black"
                     : "bg-zinc-800 text-zinc-400 hover:text-white"
@@ -394,20 +431,28 @@ function ActionReview({
                 {option}
               </button>
             ))}
-          </div>
-        )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400 transition hover:border-white/30 hover:text-white"
+          >
+            Close
+          </button>
+        </div>
       </div>
 
-      <div className="flex min-h-[420px] flex-col md:flex-row">
-        {/* LEFT SIDEBAR */}
-        <div className="order-2 border-t border-white/10 md:order-1 md:w-[32%] md:border-r md:border-t-0">
-          <div className="border-b border-white/10 px-4 py-3">
+      {/* MAIN REVIEW AREA */}
+      <div className="flex flex-col md:h-[470px] md:flex-row">
+        {/* TIMELINE */}
+        <aside className="order-2 border-t border-white/10 bg-[#0d1015] md:order-1 md:w-[25%] md:border-r md:border-t-0">
+          <div className="flex h-11 items-center border-b border-white/10 px-4">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
               Match Timeline
             </p>
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[320px] overflow-y-auto md:h-[calc(470px-44px)] md:max-h-none">
             {filteredActions.map((action, index) => {
               const active = index === selectedIndex;
 
@@ -416,68 +461,90 @@ function ActionReview({
                   key={`${action.time}-${index}`}
                   type="button"
                   onClick={() => setSelectedIndex(index)}
-                  className={`w-full border-b border-white/5 p-4 text-left transition ${
+                  className={`group w-full border-b border-white/5 px-4 py-4 text-left transition ${
                     active
-                      ? "border-l-4 border-l-yellow-400 bg-yellow-400/10"
-                      : "border-l-4 border-l-transparent hover:bg-white/5"
+                      ? "bg-yellow-400/10"
+                      : "hover:bg-white/[0.035]"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`text-sm font-bold ${
-                        active ? "text-yellow-400" : "text-white"
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-black transition ${
+                        active
+                          ? "bg-yellow-400 text-black"
+                          : "bg-white/5 text-zinc-600 group-hover:text-zinc-300"
                       }`}
                     >
-                      {action.time}
-                    </span>
+                      ▶
+                    </div>
 
-                    {action.result && (
-                      <span
-                        className={`text-[10px] font-bold uppercase ${
-                          action.result === "Successful"
-                            ? "text-yellow-400"
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span
+                          className={`text-sm font-black ${
+                            active
+                              ? "text-yellow-400"
+                              : "text-white"
+                          }`}
+                        >
+                          {action.time}
+                        </span>
+
+                        {action.result && (
+                          <span
+                            className={`text-[9px] font-bold uppercase tracking-wide ${
+                              action.result === "Successful"
+                                ? "text-yellow-400"
+                                : "text-zinc-600"
+                            }`}
+                          >
+                            {action.result === "Successful"
+                              ? "✓ Success"
+                              : "✕ Unsuccessful"}
+                          </span>
+                        )}
+                      </div>
+
+                      <p
+                        className={`mt-1.5 text-xs leading-relaxed ${
+                          active
+                            ? "text-zinc-300"
                             : "text-zinc-500"
                         }`}
                       >
-                        {action.result === "Successful" ? "✓" : "✕"}{" "}
-                        {action.result}
-                      </span>
-                    )}
+                        {action.detail}
+                      </p>
+                    </div>
                   </div>
-
-                  <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-                    {action.detail}
-                  </p>
                 </button>
               );
             })}
 
             {filteredActions.length === 0 && (
-              <div className="p-6 text-center text-sm text-zinc-500">
+              <div className="p-6 text-center text-xs text-zinc-500">
                 No actions match this filter.
               </div>
             )}
           </div>
-        </div>
+        </aside>
 
-        {/* VIDEO PLAYER */}
-        <div className="order-1 flex flex-1 flex-col md:order-2">
-          <div className="flex min-h-[320px] flex-1 items-center justify-center bg-black p-6">
+        {/* VIDEO */}
+        <div className="order-1 flex min-w-0 flex-1 flex-col bg-black md:order-2">
+          <div className="flex min-h-[330px] flex-1 items-center justify-center p-4 md:min-h-0 md:p-5">
             {selectedAction ? (
-              <div className="w-full text-center">
-                <div className="mx-auto flex aspect-video w-full max-w-3xl items-center justify-center rounded-xl border border-white/10 bg-[#050608] shadow-2xl">
-                  <div>
-                    <button
-                      type="button"
-                      className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-yellow-400 text-2xl font-black text-black transition hover:scale-105"
-                    >
-                      ▶
-                    </button>
+              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-[#030405]">
+                <div className="text-center">
+                  <button
+                    type="button"
+                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-yellow-400 text-2xl font-black text-black shadow-lg transition hover:scale-105"
+                    aria-label="Play selected match clip"
+                  >
+                    ▶
+                  </button>
 
-                    <p className="mt-5 text-xs font-bold uppercase tracking-wider text-zinc-500">
-                      Match Video
-                    </p>
-                  </div>
+                  <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
+                    Match Video
+                  </p>
                 </div>
               </div>
             ) : (
@@ -487,55 +554,54 @@ function ActionReview({
             )}
           </div>
 
+          {/* COMPACT VIDEO FOOTER */}
           {selectedAction && (
-            <div className="border-t border-white/10 bg-zinc-900/70 p-5">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl font-black text-yellow-400">
-                      {selectedAction.time}
-                    </span>
+            <div className="flex flex-col gap-3 border-t border-white/10 bg-[#0d1015] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <span className="shrink-0 text-xl font-black text-yellow-400">
+                  {selectedAction.time}
+                </span>
 
-                    {selectedAction.result && (
-                      <span
-                        className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${
-                          selectedAction.result === "Successful"
-                            ? "bg-yellow-400/15 text-yellow-400"
-                            : "bg-white/10 text-zinc-400"
-                        }`}
-                      >
-                        {selectedAction.result === "Successful"
-                          ? "✓ "
-                          : "✕ "}
-                        {selectedAction.result}
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="mt-2 text-sm text-zinc-300">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-zinc-200">
                     {selectedAction.detail}
                   </p>
-                </div>
 
-                <div className="rounded-lg bg-black/40 px-4 py-3 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                    Clip Window
-                  </p>
-
-                  <p className="mt-1 text-xs text-white">
-                    5 sec before • Action • 5 sec after
-                  </p>
+                  {selectedAction.result && (
+                    <p
+                      className={`mt-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                        selectedAction.result === "Successful"
+                          ? "text-yellow-400"
+                          : "text-zinc-500"
+                      }`}
+                    >
+                      {selectedAction.result === "Successful"
+                        ? "✓ Successful"
+                        : "✕ Unsuccessful"}
+                    </p>
+                  )}
                 </div>
+              </div>
+
+              <div className="shrink-0 text-left sm:text-right">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-600">
+                  Clip Context
+                </p>
+
+                <p className="mt-0.5 text-[10px] text-zinc-400">
+                  5 sec before • action • 5 sec after
+                </p>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      <div className="border-t border-white/10 px-5 py-3">
-        <p className="text-[10px] text-zinc-600">
-          Demo action data. Final timestamps and video moments will come
-          from the analyzed match.
+      <div className="border-t border-white/10 bg-[#090b0f] px-5 py-2">
+        <p className="text-[9px] text-zinc-700">
+          Prototype timeline uses representative demo events. Final
+          timeline will contain every verified action from the analyzed
+          match.
         </p>
       </div>
     </div>
@@ -546,16 +612,19 @@ function StatSection({
   title,
   subtitle,
   stats,
+  player,
   activeStat,
   onStatClick,
 }: {
   title: string;
   subtitle: string;
   stats: { label: string; value: string | number }[];
+  player: Player;
   activeStat: string | null;
   onStatClick: (label: string) => void;
 }) {
   const labels = stats.map((stat) => stat.label);
+
   const showReview =
     activeStat !== null && labels.includes(activeStat);
 
@@ -583,8 +652,9 @@ function StatSection({
 
       {showReview && activeStat && (
         <ActionReview
-          key={activeStat}
+          key={`${player.number}-${activeStat}`}
           stat={activeStat}
+          player={player}
           onClose={() => onStatClick(activeStat)}
         />
       )}
@@ -594,7 +664,10 @@ function StatSection({
 
 export default function DemoPage() {
   const [selected, setSelected] = useState<Player>(players[0]);
-  const [activeStat, setActiveStat] = useState<string | null>(null);
+
+  const [activeStat, setActiveStat] = useState<string | null>(
+    null
+  );
 
   function selectPlayer(player: Player) {
     setSelected(player);
@@ -614,6 +687,7 @@ export default function DemoPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        {/* HEADER */}
         <div className="mb-8">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-yellow-400">
             InsightFC Coach Dashboard
@@ -628,6 +702,7 @@ export default function DemoPage() {
           </p>
         </div>
 
+        {/* SUMMARY */}
         <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             ["12", "Players"],
@@ -648,6 +723,7 @@ export default function DemoPage() {
           ))}
         </div>
 
+        {/* MATCH */}
         <section className="mb-8 rounded-2xl border border-white/10 bg-zinc-900 p-6">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
             <div>
@@ -686,6 +762,7 @@ export default function DemoPage() {
           </div>
         </section>
 
+        {/* PLAYERS */}
         <section className="mb-8">
           <div className="mb-4">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-yellow-400">
@@ -699,7 +776,8 @@ export default function DemoPage() {
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {players.map((player) => {
-              const active = selected.number === player.number;
+              const active =
+                selected.number === player.number;
 
               return (
                 <button
@@ -741,6 +819,7 @@ export default function DemoPage() {
           </div>
         </section>
 
+        {/* PLAYER REPORT */}
         <section className="mb-8 rounded-2xl border border-white/10 bg-zinc-900 p-6">
           <div className="mb-6 border-b border-white/10 pb-5">
             <p className="text-xs font-bold uppercase tracking-wider text-yellow-400">
@@ -760,6 +839,7 @@ export default function DemoPage() {
             <StatSection
               title="In Possession"
               subtitle="How the player used and progressed the ball"
+              player={selected}
               activeStat={activeStat}
               onStatClick={handleStatClick}
               stats={[
@@ -785,6 +865,7 @@ export default function DemoPage() {
             <StatSection
               title="Attacking"
               subtitle="Actions that directly contributed to creating or finishing chances"
+              player={selected}
               activeStat={activeStat}
               onStatClick={handleStatClick}
               stats={[
@@ -806,6 +887,7 @@ export default function DemoPage() {
             <StatSection
               title="Defending"
               subtitle="Actions showing defensive involvement and work without the ball"
+              player={selected}
               activeStat={activeStat}
               onStatClick={handleStatClick}
               stats={[
@@ -822,9 +904,10 @@ export default function DemoPage() {
           </div>
         </section>
 
+        {/* HIGHLIGHTS */}
         <section className="grid gap-5 md:grid-cols-2">
           <div className="rounded-2xl border border-white/10 bg-zinc-900 p-6">
-            <div className="mb-8 flex h-36 items-center justify-center rounded-xl bg-black/50">
+            <div className="mb-6 flex h-36 items-center justify-center rounded-xl bg-black/50">
               <div className="text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-400 text-lg font-black text-black">
                   ▶
@@ -843,10 +926,14 @@ export default function DemoPage() {
             <h3 className="mt-2 text-xl font-bold">
               Team Highlight Reel
             </h3>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              Review the key moments from the match.
+            </p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-zinc-900 p-6">
-            <div className="mb-8 flex h-36 items-center justify-center rounded-xl bg-black/50">
+            <div className="mb-6 flex h-36 items-center justify-center rounded-xl bg-black/50">
               <div className="text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-400 text-lg font-black text-black">
                   ▶
@@ -865,17 +952,20 @@ export default function DemoPage() {
             <h3 className="mt-2 text-xl font-bold">
               {selected.name} Highlights
             </h3>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              Watch selected moments from this player&apos;s match.
+            </p>
           </div>
         </section>
 
+        {/* FULL MATCH */}
         <div className="mt-5 rounded-2xl border border-white/10 bg-zinc-900 p-5 text-center">
           <p className="text-xs font-bold uppercase tracking-wider text-yellow-400">
             Full Match
           </p>
 
-          <p className="mt-2 font-bold">
-            Watch Full Match
-          </p>
+          <p className="mt-2 font-bold">Watch Full Match</p>
 
           <p className="mt-1 text-xs text-zinc-500">
             Review the complete match video and surrounding context.
