@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 type Half = "First Half" | "Second Half";
+type GameSize = 7 | 9 | 11;
 
 type VideoPart = {
   id: string;
@@ -59,10 +60,10 @@ export default function UploadMatchPage() {
   const [location, setLocation] = useState("");
   const [halfLength, setHalfLength] = useState("30");
 
+  const [gameSize, setGameSize] = useState<GameSize>(7);
   const [lineup, setLineup] = useState<PitchPlayer[]>([]);
-  const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(
-    null
-  );
+  const [selectedPlayerId, setSelectedPlayerId] =
+    useState<number | null>(null);
 
   const [videos, setVideos] = useState<VideoPart[]>([]);
   const [message, setMessage] = useState("");
@@ -80,9 +81,25 @@ export default function UploadMatchPage() {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   }
 
+  function changeGameSize(size: GameSize) {
+    if (lineup.length > size) {
+      setMessage(
+        `Move ${lineup.length - size} player${
+          lineup.length - size === 1 ? "" : "s"
+        } to the bench before switching to ${size}v${size}.`
+      );
+      return;
+    }
+
+    setGameSize(size);
+    setMessage("");
+  }
+
   function addStarter(player: Player) {
-    if (lineup.length >= 11) {
-      setMessage("The starting lineup can contain up to 11 players.");
+    if (lineup.length >= gameSize) {
+      setMessage(
+        `A ${gameSize}v${gameSize} starting lineup contains ${gameSize} players.`
+      );
       return;
     }
 
@@ -110,6 +127,8 @@ export default function UploadMatchPage() {
     if (selectedPlayerId === playerId) {
       setSelectedPlayerId(null);
     }
+
+    setMessage("");
   }
 
   function moveSelectedPlayer(x: number, y: number) {
@@ -135,8 +154,11 @@ export default function UploadMatchPage() {
 
     const rect = event.currentTarget.getBoundingClientRect();
 
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    const x =
+      ((event.clientX - rect.left) / rect.width) * 100;
+
+    const y =
+      ((event.clientY - rect.top) / rect.height) * 100;
 
     moveSelectedPlayer(x, y);
   }
@@ -151,14 +173,16 @@ export default function UploadMatchPage() {
       return;
     }
 
-    const nextVideos: VideoPart[] = incoming.map((file, index) => ({
-      id: `${file.name}-${file.size}-${Date.now()}-${index}`,
-      file,
-      half:
-        videos.length + index < 2
-          ? "First Half"
-          : "Second Half",
-    }));
+    const nextVideos: VideoPart[] = incoming.map(
+      (file, index) => ({
+        id: `${file.name}-${file.size}-${Date.now()}-${index}`,
+        file,
+        half:
+          videos.length + index < 2
+            ? "First Half"
+            : "Second Half",
+      })
+    );
 
     setVideos((current) => [...current, ...nextVideos]);
     setMessage("");
@@ -194,7 +218,9 @@ export default function UploadMatchPage() {
 
   function processMatch() {
     if (!opponent.trim()) {
-      setMessage("Enter the opponent before processing the match.");
+      setMessage(
+        "Enter the opponent before processing the match."
+      );
       return;
     }
 
@@ -208,8 +234,10 @@ export default function UploadMatchPage() {
       return;
     }
 
-    if (lineup.length === 0) {
-      setMessage("Add the starting lineup before processing the match.");
+    if (lineup.length !== gameSize) {
+      setMessage(
+        `Complete the ${gameSize}v${gameSize} starting lineup. You currently have ${lineup.length} of ${gameSize} starters selected.`
+      );
       return;
     }
 
@@ -266,7 +294,9 @@ export default function UploadMatchPage() {
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
               Step 1
             </div>
-            <h2 className="mt-1 text-xl font-bold">Match Details</h2>
+            <h2 className="mt-1 text-xl font-bold">
+              Match Details
+            </h2>
           </div>
 
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -382,7 +412,9 @@ export default function UploadMatchPage() {
             </label>
 
             <div className="rounded-xl border border-zinc-800 bg-black p-4">
-              <div className="text-sm font-semibold">Match Format</div>
+              <div className="text-sm font-semibold">
+                Match Format
+              </div>
               <div className="mt-1 text-sm text-zinc-400">
                 2 halves • {halfLength} minutes each
               </div>
@@ -393,26 +425,52 @@ export default function UploadMatchPage() {
           </div>
         </section>
 
-        {/* STEP 2 - LINEUP */}
+        {/* STEP 2 */}
 
         <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 md:p-6">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 2
               </div>
+
               <h2 className="mt-1 text-xl font-bold">
                 Starting Lineup
               </h2>
+
               <p className="mt-2 text-sm text-zinc-400">
-                Add starters from your saved roster. Select a player,
-                then click anywhere on the field to position them.
+                Choose the match format, add starters from your
+                roster, then position them anywhere on the field.
               </p>
             </div>
 
-            <div className="rounded-full border border-zinc-800 bg-black px-4 py-2 text-sm font-bold">
-              <span className="text-yellow-400">{lineup.length}</span>
-              <span className="text-zinc-500"> / 11 starters</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex rounded-xl border border-zinc-800 bg-black p-1">
+                {([7, 9, 11] as GameSize[]).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => changeGameSize(size)}
+                    className={`rounded-lg px-4 py-2 text-xs font-black transition ${
+                      gameSize === size
+                        ? "bg-yellow-400 text-black"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    {size}v{size}
+                  </button>
+                ))}
+              </div>
+
+              <div className="rounded-full border border-zinc-800 bg-black px-4 py-2 text-sm font-bold">
+                <span className="text-yellow-400">
+                  {lineup.length}
+                </span>
+                <span className="text-zinc-500">
+                  {" "}
+                  / {gameSize} starters
+                </span>
+              </div>
             </div>
           </div>
 
@@ -422,8 +480,6 @@ export default function UploadMatchPage() {
                 onClick={handlePitchClick}
                 className="relative aspect-[0.72] max-h-[700px] w-full cursor-crosshair overflow-hidden rounded-2xl border-2 border-white/30 bg-[#315f2d]"
               >
-                {/* FIELD MARKINGS */}
-
                 <div className="pointer-events-none absolute inset-[3%] border-2 border-white/25" />
 
                 <div className="pointer-events-none absolute left-[3%] right-[3%] top-1/2 border-t-2 border-white/25" />
@@ -436,10 +492,9 @@ export default function UploadMatchPage() {
 
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30" />
 
-                {/* PLAYERS */}
-
                 {lineup.map((player) => {
-                  const selected = selectedPlayerId === player.id;
+                  const selected =
+                    selectedPlayerId === player.id;
 
                   return (
                     <button
@@ -514,8 +569,6 @@ export default function UploadMatchPage() {
               )}
             </div>
 
-            {/* ROSTER */}
-
             <div className="rounded-2xl border border-zinc-800 bg-black p-4">
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -580,7 +633,7 @@ export default function UploadMatchPage() {
                     <button
                       type="button"
                       onClick={() => addStarter(player)}
-                      disabled={lineup.length >= 11}
+                      disabled={lineup.length >= gameSize}
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-400 text-xl font-black text-black disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       +
@@ -592,7 +645,7 @@ export default function UploadMatchPage() {
           </div>
         </section>
 
-        {/* STEP 3 - VIDEO */}
+        {/* STEP 3 */}
 
         <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 md:p-6">
           <div className="mb-6 flex items-start justify-between gap-4">
@@ -600,7 +653,9 @@ export default function UploadMatchPage() {
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 3
               </div>
-              <h2 className="mt-1 text-xl font-bold">Match Videos</h2>
+              <h2 className="mt-1 text-xl font-bold">
+                Match Videos
+              </h2>
             </div>
 
             <div className="text-right text-xs text-zinc-500">
@@ -654,7 +709,8 @@ export default function UploadMatchPage() {
                         {video.file.name}
                       </div>
                       <div className="mt-1 text-xs text-zinc-500">
-                        {(video.file.size / 1024 / 1024).toFixed(0)} MB
+                        {(video.file.size / 1024 / 1024).toFixed(0)}{" "}
+                        MB
                       </div>
                     </div>
 
@@ -726,7 +782,11 @@ export default function UploadMatchPage() {
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 4
               </div>
-              <h2 className="mt-1 text-xl font-bold">Process Match</h2>
+
+              <h2 className="mt-1 text-xl font-bold">
+                Process Match
+              </h2>
+
               <p className="mt-2 max-w-2xl text-sm text-zinc-400">
                 InsightFC will use the match details, starting lineup,
                 and video to create player actions, stats, timestamps,
