@@ -1,14 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Half = "First Half" | "Second Half";
 type GameSize = 7 | 9 | 11;
+type UploadStatus = "ready" | "uploading" | "complete" | "error";
 
 type VideoPart = {
   id: string;
   file: File;
   half: Half;
+  status: UploadStatus;
+  storagePath?: string;
 };
 
 type Player = {
@@ -53,6 +58,8 @@ const startingPositions = [
 ];
 
 export default function UploadMatchPage() {
+  const router = useRouter();
+
   const [opponent, setOpponent] = useState("");
   const [matchDate, setMatchDate] = useState("");
   const [environment, setEnvironment] = useState("Outdoor");
@@ -67,6 +74,8 @@ export default function UploadMatchPage() {
 
   const [videos, setVideos] = useState<VideoPart[]>([]);
   const [message, setMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [currentUpload, setCurrentUpload] = useState(0);
 
   const bench = roster.filter(
     (player) => !lineup.some((starter) => starter.id === player.id)
@@ -78,10 +87,23 @@ export default function UploadMatchPage() {
 
   function formatSize(bytes: number) {
     if (!bytes) return "0 GB";
+
+    if (bytes < 1024 * 1024 * 1024) {
+      return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+    }
+
     return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   }
 
+  function cleanFileName(name: string) {
+    return name
+      .replace(/[^a-zA-Z0-9._-]/g, "-")
+      .replace(/-+/g, "-");
+  }
+
   function changeGameSize(size: GameSize) {
+    if (isUploading) return;
+
     if (lineup.length > size) {
       setMessage(
         `Move ${lineup.length - size} player${
@@ -96,6 +118,8 @@ export default function UploadMatchPage() {
   }
 
   function addStarter(player: Player) {
+    if (isUploading) return;
+
     if (lineup.length >= gameSize) {
       setMessage(
         `A ${gameSize}v${gameSize} starting lineup contains ${gameSize} players.`
@@ -120,6 +144,8 @@ export default function UploadMatchPage() {
   }
 
   function moveToBench(playerId: number) {
+    if (isUploading) return;
+
     setLineup((current) =>
       current.filter((player) => player.id !== playerId)
     );
@@ -132,7 +158,7 @@ export default function UploadMatchPage() {
   }
 
   function moveSelectedPlayer(x: number, y: number) {
-    if (selectedPlayerId === null) return;
+    if (selectedPlayerId === null || isUploading) return;
 
     setLineup((current) =>
       current.map((player) =>
@@ -150,7 +176,7 @@ export default function UploadMatchPage() {
   function handlePitchClick(
     event: React.MouseEvent<HTMLDivElement>
   ) {
-    if (selectedPlayerId === null) return;
+    if (selectedPlayerId === null || isUploading) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
 
@@ -164,12 +190,21 @@ export default function UploadMatchPage() {
   }
 
   function handleFiles(files: FileList | null) {
-    if (!files) return;
+    if (!files || isUploading) return;
 
     const incoming = Array.from(files);
 
     if (videos.length + incoming.length > 4) {
       setMessage("A match can contain up to 4 video files.");
+      return;
+    }
+
+    const invalidFiles = incoming.filter(
+      (file) => !file.type.startsWith("video/")
+    );
+
+    if (invalidFiles.length > 0) {
+      setMessage("Please select video files only.");
       return;
     }
 
@@ -181,6 +216,7 @@ export default function UploadMatchPage() {
           videos.length + index < 2
             ? "First Half"
             : "Second Half",
+        status: "ready",
       })
     );
 
@@ -189,13 +225,18 @@ export default function UploadMatchPage() {
   }
 
   function removeVideo(id: string) {
+    if (isUploading) return;
+
     setVideos((current) =>
       current.filter((video) => video.id !== id)
     );
+
     setMessage("");
   }
 
   function changeHalf(id: string, half: Half) {
+    if (isUploading) return;
+
     setVideos((current) =>
       current.map((video) =>
         video.id === id ? { ...video, half } : video
@@ -204,6 +245,8 @@ export default function UploadMatchPage() {
   }
 
   function moveVideo(index: number, direction: -1 | 1) {
+    if (isUploading) return;
+
     const newIndex = index + direction;
 
     if (newIndex < 0 || newIndex >= videos.length) return;
@@ -216,34 +259,34 @@ export default function UploadMatchPage() {
     setVideos(reordered);
   }
 
-  function processMatch() {
+  function validateMatch() {
     if (!opponent.trim()) {
       setMessage(
         "Enter the opponent before processing the match."
       );
-      return;
+      return false;
     }
 
     if (!matchDate) {
       setMessage("Choose the match date.");
-      return;
+      return false;
     }
 
     if (!location.trim()) {
       setMessage("Enter the match location.");
-      return;
+      return false;
     }
 
     if (lineup.length !== gameSize) {
       setMessage(
         `Complete the ${gameSize}v${gameSize} starting lineup. You currently have ${lineup.length} of ${gameSize} starters selected.`
       );
-      return;
+      return false;
     }
 
     if (videos.length < 1) {
       setMessage("Upload at least 1 match video.");
-      return;
+      return false;
     }
 
     if (videos.length > 1) {
@@ -259,13 +302,165 @@ export default function UploadMatchPage() {
         setMessage(
           "Assign at least one video to the First Half and one to the Second Half."
         );
-        return;
+        return false;
       }
     }
 
-    setMessage(
-      "Match setup complete. Video storage and analysis will be connected next."
-    );
+    return true;
+  }
+
+  async function processMatch() {
+    if (isUploading) return;
+
+    if (!validateMatch()) return;
+
+    setMessage("Checking your InsightFC account...");
+
+    const supabase = supabaseBrowser();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setMessage(
+        "You must be signed in to InsightFC before uploading match videos."
+      );
+      return;
+    }
+
+    setIsUploading(true);
+    setCurrentUpload(0);
+
+    const matchId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`;
+
+    try {
+      const uploadedVideos: {
+        name: string;
+        path: string;
+        half: Half;
+        size: number;
+        type: string;
+      }[] = [];
+
+      for (let index = 0; index < videos.length; index++) {
+        const video = videos[index];
+
+        setCurrentUpload(index + 1);
+
+        setVideos((current) =>
+          current.map((item) =>
+            item.id === video.id
+              ? { ...item, status: "uploading" }
+              : item
+          )
+        );
+
+        setMessage(
+          `Uploading video ${index + 1} of ${
+            videos.length
+          }: ${video.file.name}`
+        );
+
+        const fileName = cleanFileName(video.file.name);
+
+        const storagePath = `${user.id}/${matchId}/${
+          index + 1
+        }-${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("match-videos")
+          .upload(storagePath, video.file, {
+            contentType:
+              video.file.type || "application/octet-stream",
+            cacheControl: "3600",
+            upsert: false,
+          });
+
+        if (uploadError) {
+          setVideos((current) =>
+            current.map((item) =>
+              item.id === video.id
+                ? { ...item, status: "error" }
+                : item
+            )
+          );
+
+          throw new Error(
+            `${video.file.name}: ${uploadError.message}`
+          );
+        }
+
+        uploadedVideos.push({
+          name: video.file.name,
+          path: storagePath,
+          half: video.half,
+          size: video.file.size,
+          type: video.file.type,
+        });
+
+        setVideos((current) =>
+          current.map((item) =>
+            item.id === video.id
+              ? {
+                  ...item,
+                  status: "complete",
+                  storagePath,
+                }
+              : item
+          )
+        );
+      }
+
+      const processingData = {
+        matchId,
+        team: "Northside U10",
+        opponent: opponent.trim(),
+        matchDate,
+        environment,
+        matchType,
+        location: location.trim(),
+        halfLength: Number(halfLength),
+        gameSize,
+        lineup: lineup.map((player) => ({
+          id: player.id,
+          name: player.name,
+          number: player.number,
+          position: player.position,
+          x: player.x,
+          y: player.y,
+        })),
+        videos: uploadedVideos,
+      };
+
+      sessionStorage.setItem(
+        "insightfc-processing-match",
+        JSON.stringify(processingData)
+      );
+
+      setMessage(
+        "Upload complete. Opening match processing..."
+      );
+
+      router.push("/processing");
+    } catch (error) {
+      console.error("Match video upload failed:", error);
+
+      setMessage(
+        error instanceof Error
+          ? `Upload failed: ${error.message}`
+          : "Upload failed. Please try again."
+      );
+
+      setIsUploading(false);
+      setCurrentUpload(0);
+    }
   }
 
   return (
@@ -294,6 +489,7 @@ export default function UploadMatchPage() {
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
               Step 1
             </div>
+
             <h2 className="mt-1 text-xl font-bold">
               Match Details
             </h2>
@@ -304,6 +500,7 @@ export default function UploadMatchPage() {
               <span className="mb-2 block text-sm font-semibold text-zinc-300">
                 Team
               </span>
+
               <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
                 Northside U10
               </div>
@@ -313,13 +510,15 @@ export default function UploadMatchPage() {
               <span className="mb-2 block text-sm font-semibold text-zinc-300">
                 Opponent
               </span>
+
               <input
                 value={opponent}
+                disabled={isUploading}
                 onChange={(event) =>
                   setOpponent(event.target.value)
                 }
                 placeholder="e.g. Riverside U10"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               />
             </label>
 
@@ -327,13 +526,15 @@ export default function UploadMatchPage() {
               <span className="mb-2 block text-sm font-semibold text-zinc-300">
                 Match Date
               </span>
+
               <input
                 type="date"
                 value={matchDate}
+                disabled={isUploading}
                 onChange={(event) =>
                   setMatchDate(event.target.value)
                 }
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               />
             </label>
 
@@ -347,8 +548,9 @@ export default function UploadMatchPage() {
                   <button
                     key={option}
                     type="button"
+                    disabled={isUploading}
                     onClick={() => setEnvironment(option)}
-                    className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                    className={`rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50 ${
                       environment === option
                         ? "border-yellow-400 bg-yellow-400 text-black"
                         : "border-zinc-800 bg-zinc-900 text-zinc-300"
@@ -364,12 +566,14 @@ export default function UploadMatchPage() {
               <span className="mb-2 block text-sm font-semibold text-zinc-300">
                 Match Type
               </span>
+
               <select
                 value={matchType}
+                disabled={isUploading}
                 onChange={(event) =>
                   setMatchType(event.target.value)
                 }
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               >
                 <option>League</option>
                 <option>Tournament</option>
@@ -381,13 +585,15 @@ export default function UploadMatchPage() {
               <span className="mb-2 block text-sm font-semibold text-zinc-300">
                 Location
               </span>
+
               <input
                 value={location}
+                disabled={isUploading}
                 onChange={(event) =>
                   setLocation(event.target.value)
                 }
                 placeholder="e.g. Oakland Yard"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               />
             </label>
 
@@ -395,12 +601,14 @@ export default function UploadMatchPage() {
               <span className="mb-2 block text-sm font-semibold text-zinc-300">
                 Length of Each Half
               </span>
+
               <select
                 value={halfLength}
+                disabled={isUploading}
                 onChange={(event) =>
                   setHalfLength(event.target.value)
                 }
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               >
                 <option value="20">20 minutes</option>
                 <option value="25">25 minutes</option>
@@ -415,9 +623,11 @@ export default function UploadMatchPage() {
               <div className="text-sm font-semibold">
                 Match Format
               </div>
+
               <div className="mt-1 text-sm text-zinc-400">
                 2 halves • {halfLength} minutes each
               </div>
+
               <div className="mt-1 text-xs text-zinc-500">
                 {environment} • {matchType}
               </div>
@@ -450,8 +660,9 @@ export default function UploadMatchPage() {
                   <button
                     key={size}
                     type="button"
+                    disabled={isUploading}
                     onClick={() => changeGameSize(size)}
-                    className={`rounded-lg px-4 py-2 text-xs font-black transition ${
+                    className={`rounded-lg px-4 py-2 text-xs font-black transition disabled:opacity-50 ${
                       gameSize === size
                         ? "bg-yellow-400 text-black"
                         : "text-zinc-400 hover:text-white"
@@ -466,6 +677,7 @@ export default function UploadMatchPage() {
                 <span className="text-yellow-400">
                   {lineup.length}
                 </span>
+
                 <span className="text-zinc-500">
                   {" "}
                   / {gameSize} starters
@@ -481,15 +693,10 @@ export default function UploadMatchPage() {
                 className="relative aspect-[0.72] max-h-[700px] w-full cursor-crosshair overflow-hidden rounded-2xl border-2 border-white/30 bg-[#315f2d]"
               >
                 <div className="pointer-events-none absolute inset-[3%] border-2 border-white/25" />
-
                 <div className="pointer-events-none absolute left-[3%] right-[3%] top-1/2 border-t-2 border-white/25" />
-
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-[18%] aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/25" />
-
                 <div className="pointer-events-none absolute left-1/2 top-[3%] h-[16%] w-[42%] -translate-x-1/2 border-2 border-t-0 border-white/25" />
-
                 <div className="pointer-events-none absolute bottom-[3%] left-1/2 h-[16%] w-[42%] -translate-x-1/2 border-2 border-b-0 border-white/25" />
-
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30" />
 
                 {lineup.map((player) => {
@@ -500,6 +707,7 @@ export default function UploadMatchPage() {
                     <button
                       key={player.id}
                       type="button"
+                      disabled={isUploading}
                       onClick={(event) => {
                         event.stopPropagation();
                         setSelectedPlayerId(player.id);
@@ -508,7 +716,7 @@ export default function UploadMatchPage() {
                         left: `${player.x}%`,
                         top: `${player.y}%`,
                       }}
-                      className="absolute -translate-x-1/2 -translate-y-1/2"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 disabled:opacity-60"
                     >
                       <div
                         className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border-2 text-sm font-black shadow-lg transition md:h-14 md:w-14 ${
@@ -539,6 +747,7 @@ export default function UploadMatchPage() {
                       <div className="font-bold">
                         Add players from your roster →
                       </div>
+
                       <div className="mt-1 text-xs text-zinc-400">
                         Then position them anywhere on the field.
                       </div>
@@ -560,8 +769,9 @@ export default function UploadMatchPage() {
 
                   <button
                     type="button"
+                    disabled={isUploading}
                     onClick={() => setSelectedPlayerId(null)}
-                    className="text-xs font-bold text-zinc-400 hover:text-white"
+                    className="text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-50"
                   >
                     Done
                   </button>
@@ -572,7 +782,10 @@ export default function UploadMatchPage() {
             <div className="rounded-2xl border border-zinc-800 bg-black p-4">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <div className="font-bold">Saved Roster</div>
+                  <div className="font-bold">
+                    Saved Roster
+                  </div>
+
                   <div className="mt-1 text-xs text-zinc-500">
                     Tap + to add a starter
                   </div>
@@ -597,6 +810,7 @@ export default function UploadMatchPage() {
                       <div className="truncate text-sm font-bold">
                         {player.name}
                       </div>
+
                       <div className="text-xs text-zinc-500">
                         {player.position} • Starter
                       </div>
@@ -604,8 +818,9 @@ export default function UploadMatchPage() {
 
                     <button
                       type="button"
+                      disabled={isUploading}
                       onClick={() => moveToBench(player.id)}
-                      className="rounded-lg border border-zinc-700 px-2.5 py-2 text-xs font-bold text-zinc-300 hover:border-white"
+                      className="rounded-lg border border-zinc-700 px-2.5 py-2 text-xs font-bold text-zinc-300 hover:border-white disabled:opacity-50"
                     >
                       Bench
                     </button>
@@ -625,6 +840,7 @@ export default function UploadMatchPage() {
                       <div className="truncate text-sm font-bold">
                         {player.name}
                       </div>
+
                       <div className="text-xs text-zinc-500">
                         {player.position}
                       </div>
@@ -633,7 +849,9 @@ export default function UploadMatchPage() {
                     <button
                       type="button"
                       onClick={() => addStarter(player)}
-                      disabled={lineup.length >= gameSize}
+                      disabled={
+                        lineup.length >= gameSize || isUploading
+                      }
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-400 text-xl font-black text-black disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       +
@@ -653,6 +871,7 @@ export default function UploadMatchPage() {
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 3
               </div>
+
               <h2 className="mt-1 text-xl font-bold">
                 Match Videos
               </h2>
@@ -664,22 +883,32 @@ export default function UploadMatchPage() {
             </div>
           </div>
 
-          <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 bg-black px-6 text-center transition hover:border-yellow-400">
+          <label
+            className={`flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-black px-6 text-center transition ${
+              isUploading
+                ? "cursor-not-allowed border-zinc-800 opacity-50"
+                : "cursor-pointer border-zinc-700 hover:border-yellow-400"
+            }`}
+          >
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-400 text-2xl font-black text-black">
               +
             </div>
 
-            <div className="font-bold">Add Match Videos</div>
+            <div className="font-bold">
+              Add Match Videos
+            </div>
 
             <div className="mt-2 max-w-sm text-sm leading-5 text-zinc-500">
-              Select 1–4 original videos from your phone or XbotGo.
-              You do not need to combine multiple files first.
+              Select 1–4 original videos from your phone or
+              XbotGo. You do not need to combine multiple files
+              first.
             </div>
 
             <input
               type="file"
               accept="video/*"
               multiple
+              disabled={isUploading}
               className="hidden"
               onChange={(event) => {
                 handleFiles(event.target.files);
@@ -697,67 +926,127 @@ export default function UploadMatchPage() {
               {videos.map((video, index) => (
                 <div
                   key={video.id}
-                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+                  className={`rounded-xl border p-4 ${
+                    video.status === "complete"
+                      ? "border-green-500/30 bg-green-500/5"
+                      : video.status === "error"
+                      ? "border-red-500/40 bg-red-500/5"
+                      : video.status === "uploading"
+                      ? "border-yellow-400/50 bg-yellow-400/5"
+                      : "border-zinc-800 bg-zinc-900"
+                  }`}
                 >
                   <div className="flex gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-sm font-black text-black">
-                      {index + 1}
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+                        video.status === "complete"
+                          ? "bg-green-500 text-black"
+                          : video.status === "error"
+                          ? "bg-red-500 text-white"
+                          : "bg-yellow-400 text-black"
+                      }`}
+                    >
+                      {video.status === "complete"
+                        ? "✓"
+                        : video.status === "error"
+                        ? "!"
+                        : index + 1}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">
                         {video.file.name}
                       </div>
-                      <div className="mt-1 text-xs text-zinc-500">
-                        {(video.file.size / 1024 / 1024).toFixed(0)}{" "}
-                        MB
+
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        <span>
+                          {formatSize(video.file.size)}
+                        </span>
+
+                        {video.status === "ready" && (
+                          <span>Ready to upload</span>
+                        )}
+
+                        {video.status === "uploading" && (
+                          <span className="font-semibold text-yellow-400">
+                            Uploading…
+                          </span>
+                        )}
+
+                        {video.status === "complete" && (
+                          <span className="font-semibold text-green-400">
+                            Uploaded securely
+                          </span>
+                        )}
+
+                        {video.status === "error" && (
+                          <span className="font-semibold text-red-400">
+                            Upload failed
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => removeVideo(video.id)}
-                      className="text-xs font-semibold text-zinc-500 hover:text-white"
-                    >
-                      Remove
-                    </button>
+                    {!isUploading &&
+                      video.status !== "complete" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeVideo(video.id)
+                          }
+                          className="text-xs font-semibold text-zinc-500 hover:text-white"
+                        >
+                          Remove
+                        </button>
+                      )}
                   </div>
 
-                  {videos.length > 1 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <select
-                        value={video.half}
-                        onChange={(event) =>
-                          changeHalf(
-                            video.id,
-                            event.target.value as Half
-                          )
-                        }
-                        className="rounded-lg border border-zinc-700 bg-black px-3 py-2 text-xs font-semibold"
-                      >
-                        <option>First Half</option>
-                        <option>Second Half</option>
-                      </select>
+                  {videos.length > 1 &&
+                    video.status !== "complete" && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <select
+                          value={video.half}
+                          disabled={isUploading}
+                          onChange={(event) =>
+                            changeHalf(
+                              video.id,
+                              event.target.value as Half
+                            )
+                          }
+                          className="rounded-lg border border-zinc-700 bg-black px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                        >
+                          <option>First Half</option>
+                          <option>Second Half</option>
+                        </select>
 
-                      <button
-                        type="button"
-                        onClick={() => moveVideo(index, -1)}
-                        disabled={index === 0}
-                        className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
-                      >
-                        Move Up
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            moveVideo(index, -1)
+                          }
+                          disabled={
+                            index === 0 || isUploading
+                          }
+                          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
+                        >
+                          Move Up
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => moveVideo(index, 1)}
-                        disabled={index === videos.length - 1}
-                        className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
-                      >
-                        Move Down
-                      </button>
-                    </div>
-                  )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            moveVideo(index, 1)
+                          }
+                          disabled={
+                            index === videos.length - 1 ||
+                            isUploading
+                          }
+                          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
+                        >
+                          Move Down
+                        </button>
+                      </div>
+                    )}
                 </div>
               ))}
             </div>
@@ -767,9 +1056,12 @@ export default function UploadMatchPage() {
             <div className="text-sm font-semibold">
               One video or multiple files — both work.
             </div>
+
             <p className="mt-1 text-xs leading-5 text-zinc-500">
-              Multiple recordings will ultimately be treated as one
-              continuous match.
+              Your original match footage will be stored in
+              InsightFC's private match-video storage. Multiple
+              recordings will ultimately be treated as one continuous
+              match.
             </p>
           </div>
         </section>
@@ -788,18 +1080,53 @@ export default function UploadMatchPage() {
               </h2>
 
               <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-                InsightFC will use the match details, starting lineup,
-                and video to create player actions, stats, timestamps,
-                and clips.
+                InsightFC will securely upload the match videos,
+                then prepare the match for player identification,
+                actions, stats, timestamps, and clips.
               </p>
+
+              {isUploading && (
+                <div className="mt-4 max-w-xl">
+                  <div className="mb-2 flex justify-between text-xs font-semibold">
+                    <span className="text-yellow-400">
+                      Uploading match footage
+                    </span>
+                    <span className="text-zinc-500">
+                      {currentUpload} / {videos.length}
+                    </span>
+                  </div>
+
+                  <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+                    <div
+                      className="h-full bg-yellow-400 transition-all duration-300"
+                      style={{
+                        width: `${
+                          videos.length
+                            ? (currentUpload /
+                                videos.length) *
+                              100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Keep this page open while your videos upload.
+                  </p>
+                </div>
+              )}
             </div>
 
             <button
               type="button"
+              disabled={isUploading}
               onClick={processMatch}
-              className="shrink-0 rounded-xl bg-yellow-400 px-7 py-3.5 text-sm font-black text-black hover:bg-yellow-300"
+              className="shrink-0 rounded-xl bg-yellow-400 px-7 py-3.5 text-sm font-black text-black hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Process Match →
+              {isUploading
+                ? "Uploading Match…"
+                : "Process Match →"}
             </button>
           </div>
 
