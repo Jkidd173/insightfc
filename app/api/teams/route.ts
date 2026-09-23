@@ -28,7 +28,10 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ ok: true, data });
+  return NextResponse.json({
+    ok: true,
+    data,
+  });
 }
 
 export async function POST(req: Request) {
@@ -64,6 +67,7 @@ export async function POST(req: Request) {
       {
         name,
         season,
+        created_by: user.id,
       },
     ])
     .select("*")
@@ -77,7 +81,10 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json(
-    { ok: true, data },
+    {
+      ok: true,
+      data,
+    },
     { status: 201 }
   );
 }
@@ -122,7 +129,8 @@ export async function DELETE(req: Request) {
   const { error } = await supabase
     .from("teams")
     .delete()
-    .eq("id", teamId);
+    .eq("id", teamId)
+    .eq("created_by", user.id);
 
   if (error) {
     return NextResponse.json(
