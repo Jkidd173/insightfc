@@ -29,7 +29,6 @@ export default function TeamHomePage() {
         setLoading(true);
         setError(null);
 
-        // Load teams through the authenticated server API.
         const teamsResponse = await fetch("/api/teams", {
           cache: "no-store",
         });
@@ -38,7 +37,7 @@ export default function TeamHomePage() {
 
         if (!teamsResponse.ok || !teamsResult.ok) {
           throw new Error(
-            teamsResult.error || "Unable to load team."
+            teamsResult.error || "Unable to load teams."
           );
         }
 
@@ -52,8 +51,6 @@ export default function TeamHomePage() {
 
         setTeam(matchingTeam);
 
-        // Load roster through the working players API.
-        // A roster error will not prevent the overview from loading.
         try {
           const playersResponse = await fetch(
             `/api/players?teamId=${encodeURIComponent(teamId)}`,
@@ -102,7 +99,6 @@ export default function TeamHomePage() {
         <p className="font-bold text-red-300">
           Team overview could not load
         </p>
-
         <p className="mt-2 text-sm text-red-200">
           {error || "Team not found."}
         </p>
@@ -169,11 +165,7 @@ export default function TeamHomePage() {
       <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="eyebrow">Team overview</div>
-
-          <h1 className="page-title mt-2">
-            {team.name}
-          </h1>
-
+          <h1 className="page-title mt-2">{team.name}</h1>
           <p className="muted mt-2">
             {team.season || "Current season"} · Performance dashboard
           </p>
@@ -204,7 +196,6 @@ export default function TeamHomePage() {
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
             <div className="eyebrow">Season snapshot</div>
-
             <h2 className="mt-2 text-xl font-bold text-white">
               Team Performance
             </h2>
@@ -239,7 +230,6 @@ export default function TeamHomePage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="eyebrow">Schedule</div>
-
               <h2 className="mt-2 text-xl font-bold text-white">
                 Upcoming Matches
               </h2>
@@ -284,7 +274,6 @@ export default function TeamHomePage() {
               <h2 className="text-xl font-bold text-white">
                 Team Players
               </h2>
-
               <p className="muted mt-1 text-sm">
                 Current active roster
               </p>
@@ -294,7 +283,6 @@ export default function TeamHomePage() {
               <div className="text-4xl font-black text-white">
                 {activePlayers}
               </div>
-
               <div className="mt-1 text-xs font-bold uppercase tracking-wider text-zinc-500">
                 Active
               </div>
@@ -306,7 +294,6 @@ export default function TeamHomePage() {
               <div className="text-2xl font-black text-white">
                 {activePlayers}
               </div>
-
               <div className="mt-1 text-xs text-zinc-500">
                 Active players
               </div>
@@ -316,7 +303,6 @@ export default function TeamHomePage() {
               <div className="text-2xl font-black text-white">
                 {guestPlayers}
               </div>
-
               <div className="mt-1 text-xs text-zinc-500">
                 Guest players
               </div>
@@ -336,11 +322,9 @@ export default function TeamHomePage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="eyebrow">Player development</div>
-
             <h2 className="mt-2 text-xl font-bold text-white">
               Player Leaders
             </h2>
-
             <p className="muted mt-1 text-sm">
               Top performers across key development metrics.
             </p>
@@ -394,7 +378,6 @@ export default function TeamHomePage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="eyebrow">Match history</div>
-
               <h2 className="mt-2 text-xl font-bold text-white">
                 Recent Matches
               </h2>
