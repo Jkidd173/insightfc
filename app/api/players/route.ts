@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const VALID_STATUSES = ["active", "guest", "inactive"];
+const VALID_POSITIONS = [
+  "Goalkeeper",
+  "Defender",
+  "Midfielder",
+  "Forward",
+];
+const VALID_FEET = ["Right", "Left"];
+
+const PLAYER_FIELDS =
+  "id,team_id,name,jersey_number,birth_year,position,primary_foot,status,created_at,updated_at";
 
 async function getAuthenticatedClient() {
   const supabase = await createClient();
@@ -41,9 +51,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("players")
-    .select(
-      "id,team_id,name,jersey_number,position,status,created_at,updated_at"
-    )
+    .select(PLAYER_FIELDS)
     .eq("team_id", teamId)
     .order("name", { ascending: true });
 
@@ -73,18 +81,31 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
 
-  const teamId = body?.teamId;
+  const teamId =
+    typeof body?.teamId === "string"
+      ? body.teamId.trim()
+      : "";
+
   const name =
-    typeof body?.name === "string" ? body.name.trim() : "";
+    typeof body?.name === "string"
+      ? body.name.trim()
+      : "";
 
   const jerseyNumber =
     typeof body?.jerseyNumber === "string"
       ? body.jerseyNumber.trim()
       : "";
 
+  const birthYear = Number(body?.birthYear);
+
   const position =
     typeof body?.position === "string"
       ? body.position.trim()
+      : "";
+
+  const primaryFoot =
+    typeof body?.primaryFoot === "string"
+      ? body.primaryFoot.trim()
       : "";
 
   const status =
@@ -106,6 +127,38 @@ export async function POST(req: Request) {
     );
   }
 
+  if (!jerseyNumber) {
+    return NextResponse.json(
+      { ok: false, error: "Jersey number is required." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    !Number.isInteger(birthYear) ||
+    birthYear < 1900 ||
+    birthYear > new Date().getFullYear()
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "A valid birth year is required." },
+      { status: 400 }
+    );
+  }
+
+  if (!VALID_POSITIONS.includes(position)) {
+    return NextResponse.json(
+      { ok: false, error: "A valid position is required." },
+      { status: 400 }
+    );
+  }
+
+  if (!VALID_FEET.includes(primaryFoot)) {
+    return NextResponse.json(
+      { ok: false, error: "A valid primary foot is required." },
+      { status: 400 }
+    );
+  }
+
   if (!VALID_STATUSES.includes(status)) {
     return NextResponse.json(
       { ok: false, error: "Invalid player status." },
@@ -119,14 +172,14 @@ export async function POST(req: Request) {
       {
         team_id: teamId,
         name,
-        jersey_number: jerseyNumber || null,
-        position: position || null,
+        jersey_number: jerseyNumber,
+        birth_year: birthYear,
+        position,
+        primary_foot: primaryFoot,
         status,
       },
     ])
-    .select(
-      "id,team_id,name,jersey_number,position,status,created_at,updated_at"
-    )
+    .select(PLAYER_FIELDS)
     .single();
 
   if (error) {
@@ -159,6 +212,7 @@ export async function PATCH(req: Request) {
   const body = await req.json().catch(() => null);
 
   const playerId = body?.playerId;
+
   const status =
     typeof body?.status === "string"
       ? body.status.toLowerCase()
@@ -185,9 +239,7 @@ export async function PATCH(req: Request) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", playerId)
-    .select(
-      "id,team_id,name,jersey_number,position,status,created_at,updated_at"
-    )
+    .select(PLAYER_FIELDS)
     .single();
 
   if (error) {
@@ -230,7 +282,8 @@ export async function DELETE(req: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: 'Type "delete" to permanently remove this player.',
+        error:
+          'Type "delete" to permanently remove this player.',
       },
       { status: 400 }
     );
