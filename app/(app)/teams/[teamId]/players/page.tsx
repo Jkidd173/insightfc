@@ -10,9 +10,23 @@ type Player = {
   team_id: string;
   name: string;
   jersey_number: string | number | null;
+  birth_year: number | null;
   position: string | null;
+  primary_foot: string | null;
   status: PlayerStatus;
 };
+
+const positions = [
+  "Goalkeeper",
+  "Defender",
+  "Midfielder",
+  "Forward",
+];
+
+const birthYears = Array.from(
+  { length: 18 },
+  (_, index) => new Date().getFullYear() - 4 - index
+);
 
 export default function PlayersPage() {
   const params = useParams();
@@ -25,10 +39,13 @@ export default function PlayersPage() {
 
   const [name, setName] = useState("");
   const [number, setNumber] = useState("");
+  const [birthYear, setBirthYear] = useState("");
   const [position, setPosition] = useState("");
+  const [primaryFoot, setPrimaryFoot] = useState("");
 
   const [playerToDelete, setPlayerToDelete] =
     useState<Player | null>(null);
+
   const [deleteText, setDeleteText] = useState("");
   const [deleting, setDeleting] = useState(false);
 
@@ -71,7 +88,16 @@ export default function PlayersPage() {
   }, [loadPlayers]);
 
   async function addPlayer() {
-    if (!name.trim() || saving) return;
+    if (
+      !name.trim() ||
+      !number.trim() ||
+      !birthYear ||
+      !position ||
+      !primaryFoot ||
+      saving
+    ) {
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -84,9 +110,11 @@ export default function PlayersPage() {
         },
         body: JSON.stringify({
           teamId,
-          name,
-          jerseyNumber: number,
+          name: name.trim(),
+          jerseyNumber: number.trim(),
+          birthYear: Number(birthYear),
           position,
+          primaryFoot,
           status: "active",
         }),
       });
@@ -101,7 +129,9 @@ export default function PlayersPage() {
 
       setName("");
       setNumber("");
+      setBirthYear("");
       setPosition("");
+      setPrimaryFoot("");
 
       await loadPlayers();
     } catch (err) {
@@ -234,6 +264,16 @@ export default function PlayersPage() {
   );
 
   function renderPlayer(player: Player) {
+    const details = [
+      player.birth_year
+        ? `Born ${player.birth_year}`
+        : null,
+      player.position,
+      player.primary_foot
+        ? `${player.primary_foot} foot`
+        : null,
+    ].filter(Boolean);
+
     return (
       <div
         key={player.id}
@@ -262,7 +302,9 @@ export default function PlayersPage() {
           </div>
 
           <p className="mt-1 text-sm text-zinc-500">
-            {player.position || "Position not set"}
+            {details.length
+              ? details.join(" • ")
+              : "Player details not set"}
           </p>
         </div>
 
@@ -338,50 +380,123 @@ export default function PlayersPage() {
           </h2>
 
           <p className="muted mt-1 text-sm">
-            New players are added to the active roster.
+            Add a player profile to the active roster.
           </p>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <input
-            className="input"
-            placeholder="Player name"
-            value={name}
-            onChange={(event) =>
-              setName(event.target.value)
-            }
-          />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">
+              Player name
+            </label>
 
-          <input
-            className="input"
-            placeholder="Jersey #"
-            value={number}
-            onChange={(event) =>
-              setNumber(event.target.value)
-            }
-          />
+            <input
+              className="input w-full"
+              placeholder="Player name"
+              value={name}
+              onChange={(event) =>
+                setName(event.target.value)
+              }
+            />
+          </div>
 
-          <input
-            className="input"
-            placeholder="Position (optional)"
-            value={position}
-            onChange={(event) =>
-              setPosition(event.target.value)
-            }
-          />
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">
+              Jersey #
+            </label>
 
-          <button
-            type="button"
-            className="btn-yellow"
-            disabled={!name.trim() || saving}
-            onClick={addPlayer}
-          >
-            {saving ? "Adding..." : "+ Add Player"}
-          </button>
+            <input
+              className="input w-full"
+              placeholder="Jersey #"
+              inputMode="numeric"
+              value={number}
+              onChange={(event) =>
+                setNumber(event.target.value)
+              }
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">
+              Birth year
+            </label>
+
+            <select
+              className="input w-full"
+              value={birthYear}
+              onChange={(event) =>
+                setBirthYear(event.target.value)
+              }
+            >
+              <option value="">Select year</option>
+
+              {birthYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">
+              Position
+            </label>
+
+            <select
+              className="input w-full"
+              value={position}
+              onChange={(event) =>
+                setPosition(event.target.value)
+              }
+            >
+              <option value="">Select position</option>
+
+              {positions.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">
+              Primary foot
+            </label>
+
+            <select
+              className="input w-full"
+              value={primaryFoot}
+              onChange={(event) =>
+                setPrimaryFoot(event.target.value)
+              }
+            >
+              <option value="">Select foot</option>
+              <option value="Right">Right</option>
+              <option value="Left">Left</option>
+            </select>
+          </div>
         </div>
 
+        <button
+          type="button"
+          className="btn-yellow"
+          disabled={
+            !name.trim() ||
+            !number.trim() ||
+            !birthYear ||
+            !position ||
+            !primaryFoot ||
+            saving
+          }
+          onClick={addPlayer}
+        >
+          {saving ? "Adding Player..." : "+ Add Player"}
+        </button>
+
         <p className="text-xs text-zinc-500">
-          Players are securely saved to your InsightFC account.
+          All fields are required. New players are added as Active.
         </p>
       </section>
 
