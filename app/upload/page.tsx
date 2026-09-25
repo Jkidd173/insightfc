@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -49,6 +54,24 @@ const startingPositions = [
 ];
 
 export default function UploadMatchPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#050505] text-white">
+          <div className="mx-auto max-w-6xl px-5 py-10 md:px-8 md:py-14">
+            <div className="text-sm text-zinc-400">
+              Loading match upload…
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <UploadMatchContent />
+    </Suspense>
+  );
+}
+
+function UploadMatchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -196,15 +219,11 @@ export default function UploadMatchPage() {
           game.opponent_score !== null &&
           game.opponent_score !== undefined
         ) {
-          setOpponentScore(
-            String(game.opponent_score)
-          );
+          setOpponentScore(String(game.opponent_score));
         }
 
         if (game.team_jersey_color) {
-          setTeamJerseyColor(
-            game.team_jersey_color
-          );
+          setTeamJerseyColor(game.team_jersey_color);
         }
 
         if (game.opponent_jersey_color) {
@@ -243,9 +262,7 @@ export default function UploadMatchPage() {
         setSelectedPlayerId(null);
 
         const response = await fetch(
-          `/api/players?teamId=${encodeURIComponent(
-            teamId
-          )}`,
+          `/api/players?teamId=${encodeURIComponent(teamId)}`,
           {
             cache: "no-store",
           }
@@ -260,13 +277,9 @@ export default function UploadMatchPage() {
           );
         }
 
-        const players: Player[] = (
-          result.data ?? []
-        )
+        const players: Player[] = (result.data ?? [])
           .filter(
-            (player: {
-              status?: string | null;
-            }) =>
+            (player: { status?: string | null }) =>
               !player.status ||
               player.status === "active" ||
               player.status === "guest"
@@ -275,18 +288,13 @@ export default function UploadMatchPage() {
             (player: {
               id: string;
               name: string;
-              jersey_number?:
-                | string
-                | number
-                | null;
+              jersey_number?: string | number | null;
               position?: string | null;
             }) => ({
               id: player.id,
               name: player.name,
-              number:
-                Number(player.jersey_number) || 0,
-              position:
-                player.position || "Player",
+              number: Number(player.jersey_number) || 0,
+              position: player.position || "Player",
             })
           );
 
@@ -309,19 +317,10 @@ export default function UploadMatchPage() {
     if (!bytes) return "0 GB";
 
     if (bytes < 1024 * 1024 * 1024) {
-      return `${(
-        bytes /
-        1024 /
-        1024
-      ).toFixed(0)} MB`;
+      return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
     }
 
-    return `${(
-      bytes /
-      1024 /
-      1024 /
-      1024
-    ).toFixed(2)} GB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   }
 
   function cleanFileName(name: string) {
@@ -335,9 +334,7 @@ export default function UploadMatchPage() {
 
     if (lineup.length > size) {
       setMessage(
-        `Move ${
-          lineup.length - size
-        } player${
+        `Move ${lineup.length - size} player${
           lineup.length - size === 1 ? "" : "s"
         } to the bench before switching to ${size}v${size}.`
       );
@@ -379,9 +376,7 @@ export default function UploadMatchPage() {
     if (isUploading) return;
 
     setLineup((current) =>
-      current.filter(
-        (player) => player.id !== playerId
-      )
+      current.filter((player) => player.id !== playerId)
     );
 
     if (selectedPlayerId === playerId) {
@@ -391,14 +386,8 @@ export default function UploadMatchPage() {
     setMessage("");
   }
 
-  function moveSelectedPlayer(
-    x: number,
-    y: number
-  ) {
-    if (
-      selectedPlayerId === null ||
-      isUploading
-    ) {
+  function moveSelectedPlayer(x: number, y: number) {
+    if (selectedPlayerId === null || isUploading) {
       return;
     }
 
@@ -407,14 +396,8 @@ export default function UploadMatchPage() {
         player.id === selectedPlayerId
           ? {
               ...player,
-              x: Math.max(
-                8,
-                Math.min(92, x)
-              ),
-              y: Math.max(
-                7,
-                Math.min(93, y)
-              ),
+              x: Math.max(8, Math.min(92, x)),
+              y: Math.max(7, Math.min(93, y)),
             }
           : player
       )
@@ -424,10 +407,7 @@ export default function UploadMatchPage() {
   function handlePitchClick(
     event: React.MouseEvent<HTMLDivElement>
   ) {
-    if (
-      selectedPlayerId === null ||
-      isUploading
-    ) {
+    if (selectedPlayerId === null || isUploading) {
       return;
     }
 
@@ -435,14 +415,10 @@ export default function UploadMatchPage() {
       event.currentTarget.getBoundingClientRect();
 
     const x =
-      ((event.clientX - rect.left) /
-        rect.width) *
-      100;
+      ((event.clientX - rect.left) / rect.width) * 100;
 
     const y =
-      ((event.clientY - rect.top) /
-        rect.height) *
-      100;
+      ((event.clientY - rect.top) / rect.height) * 100;
 
     moveSelectedPlayer(x, y);
   }
@@ -452,10 +428,7 @@ export default function UploadMatchPage() {
 
     const incoming = Array.from(files);
 
-    if (
-      videos.length + incoming.length >
-      4
-    ) {
+    if (videos.length + incoming.length > 4) {
       setMessage(
         "A match can contain up to 4 video files."
       );
@@ -463,29 +436,25 @@ export default function UploadMatchPage() {
     }
 
     const invalidFiles = incoming.filter(
-      (file) =>
-        !file.type.startsWith("video/")
+      (file) => !file.type.startsWith("video/")
     );
 
     if (invalidFiles.length > 0) {
-      setMessage(
-        "Please select video files only."
-      );
+      setMessage("Please select video files only.");
       return;
     }
 
-    const nextVideos: VideoPart[] =
-      incoming.map((file, index) => ({
-        id: `${file.name}-${
-          file.size
-        }-${Date.now()}-${index}`,
+    const nextVideos: VideoPart[] = incoming.map(
+      (file, index) => ({
+        id: `${file.name}-${file.size}-${Date.now()}-${index}`,
         file,
         half:
           videos.length + index < 2
             ? "First Half"
             : "Second Half",
         status: "ready",
-      }));
+      })
+    );
 
     setVideos((current) => [
       ...current,
@@ -499,49 +468,35 @@ export default function UploadMatchPage() {
     if (isUploading) return;
 
     setVideos((current) =>
-      current.filter(
-        (video) => video.id !== id
-      )
+      current.filter((video) => video.id !== id)
     );
 
     setMessage("");
   }
 
-  function changeHalf(
-    id: string,
-    half: Half
-  ) {
+  function changeHalf(id: string, half: Half) {
     if (isUploading) return;
 
     setVideos((current) =>
       current.map((video) =>
-        video.id === id
-          ? { ...video, half }
-          : video
+        video.id === id ? { ...video, half } : video
       )
     );
   }
 
-  function moveVideo(
-    index: number,
-    direction: -1 | 1
-  ) {
+  function moveVideo(index: number, direction: -1 | 1) {
     if (isUploading) return;
 
     const newIndex = index + direction;
 
-    if (
-      newIndex < 0 ||
-      newIndex >= videos.length
-    ) {
+    if (newIndex < 0 || newIndex >= videos.length) {
       return;
     }
 
     const reordered = [...videos];
     const temp = reordered[index];
 
-    reordered[index] =
-      reordered[newIndex];
+    reordered[index] = reordered[newIndex];
     reordered[newIndex] = temp;
 
     setVideos(reordered);
@@ -561,19 +516,12 @@ export default function UploadMatchPage() {
     }
 
     if (!matchDate) {
-      setMessage(
-        "Choose the match date."
-      );
+      setMessage("Choose the match date.");
       return false;
     }
 
-    if (
-      teamScore === "" ||
-      opponentScore === ""
-    ) {
-      setMessage(
-        "Enter the final match score."
-      );
+    if (teamScore === "" || opponentScore === "") {
+      setMessage("Enter the final match score.");
       return false;
     }
 
@@ -581,16 +529,12 @@ export default function UploadMatchPage() {
       Number(teamScore) < 0 ||
       Number(opponentScore) < 0
     ) {
-      setMessage(
-        "Match scores cannot be negative."
-      );
+      setMessage("Match scores cannot be negative.");
       return false;
     }
 
     if (!location.trim()) {
-      setMessage(
-        "Enter the match location."
-      );
+      setMessage("Enter the match location.");
       return false;
     }
 
@@ -602,27 +546,20 @@ export default function UploadMatchPage() {
     }
 
     if (videos.length < 1) {
-      setMessage(
-        "Upload at least 1 match video."
-      );
+      setMessage("Upload at least 1 match video.");
       return false;
     }
 
     if (videos.length > 1) {
       const hasFirstHalf = videos.some(
-        (video) =>
-          video.half === "First Half"
+        (video) => video.half === "First Half"
       );
 
       const hasSecondHalf = videos.some(
-        (video) =>
-          video.half === "Second Half"
+        (video) => video.half === "Second Half"
       );
 
-      if (
-        !hasFirstHalf ||
-        !hasSecondHalf
-      ) {
+      if (!hasFirstHalf || !hasSecondHalf) {
         setMessage(
           "Assign at least one video to the First Half and one to the Second Half."
         );
@@ -637,9 +574,7 @@ export default function UploadMatchPage() {
     if (isUploading) return;
     if (!validateMatch()) return;
 
-    setMessage(
-      "Checking your InsightFC account..."
-    );
+    setMessage("Checking your InsightFC account...");
 
     const supabase = supabaseBrowser();
 
@@ -681,12 +616,9 @@ export default function UploadMatchPage() {
         location: location.trim(),
         home_away: homeAway,
         team_score: Number(teamScore),
-        opponent_score:
-          Number(opponentScore),
-        team_jersey_color:
-          teamJerseyColor,
-        opponent_jersey_color:
-          opponentJerseyColor,
+        opponent_score: Number(opponentScore),
+        team_jersey_color: teamJerseyColor,
+        opponent_jersey_color: opponentJerseyColor,
       };
 
       if (scheduledGameId) {
@@ -749,55 +681,39 @@ export default function UploadMatchPage() {
         setVideos((current) =>
           current.map((item) =>
             item.id === video.id
-              ? {
-                  ...item,
-                  status: "uploading",
-                }
+              ? { ...item, status: "uploading" }
               : item
           )
         );
 
         setMessage(
-          `Uploading video ${
-            index + 1
-          } of ${videos.length}: ${
-            video.file.name
-          }`
+          `Uploading video ${index + 1} of ${
+            videos.length
+          }: ${video.file.name}`
         );
 
-        const fileName = cleanFileName(
-          video.file.name
-        );
+        const fileName = cleanFileName(video.file.name);
 
-        const storagePath = `${
-          user.id
-        }/${gameId}/${
+        const storagePath = `${user.id}/${gameId}/${
           index + 1
         }-${fileName}`;
 
         const { error: uploadError } =
           await supabase.storage
             .from("match-videos")
-            .upload(
-              storagePath,
-              video.file,
-              {
-                contentType:
-                  video.file.type ||
-                  "application/octet-stream",
-                cacheControl: "3600",
-                upsert: false,
-              }
-            );
+            .upload(storagePath, video.file, {
+              contentType:
+                video.file.type ||
+                "application/octet-stream",
+              cacheControl: "3600",
+              upsert: false,
+            });
 
         if (uploadError) {
           setVideos((current) =>
             current.map((item) =>
               item.id === video.id
-                ? {
-                    ...item,
-                    status: "error",
-                  }
+                ? { ...item, status: "error" }
                 : item
             )
           );
@@ -831,35 +747,27 @@ export default function UploadMatchPage() {
       const processingData = {
         matchId: gameId,
         teamId,
-        team:
-          selectedTeam?.name ||
-          "InsightFC Team",
+        team: selectedTeam?.name || "InsightFC Team",
         opponent: opponent.trim(),
         matchDate,
         environment,
         matchType,
         location: location.trim(),
         homeAway,
-        halfLength:
-          Number(halfLength),
+        halfLength: Number(halfLength),
         gameSize,
-        teamScore:
-          Number(teamScore),
-        opponentScore:
-          Number(opponentScore),
+        teamScore: Number(teamScore),
+        opponentScore: Number(opponentScore),
         teamJerseyColor,
         opponentJerseyColor,
-        lineup: lineup.map(
-          (player) => ({
-            id: player.id,
-            name: player.name,
-            number: player.number,
-            position:
-              player.position,
-            x: player.x,
-            y: player.y,
-          })
-        ),
+        lineup: lineup.map((player) => ({
+          id: player.id,
+          name: player.name,
+          number: player.number,
+          position: player.position,
+          x: player.x,
+          y: player.y,
+        })),
         videos: uploadedVideos,
       };
 
@@ -889,17 +797,14 @@ export default function UploadMatchPage() {
       setCurrentUpload(0);
     }
   }
-
-  return (
+    return (
     <main className="min-h-screen bg-[#050505] text-white">
       <div className="mx-auto max-w-6xl px-5 py-10 md:px-8 md:py-14">
         <div className="mb-6 flex items-center justify-between">
           <button
             type="button"
             disabled={isUploading}
-            onClick={() =>
-              router.back()
-            }
+            onClick={() => router.back()}
             className="text-sm font-bold text-zinc-400 transition hover:text-white disabled:opacity-40"
           >
             ← Back
@@ -908,9 +813,7 @@ export default function UploadMatchPage() {
           <button
             type="button"
             disabled={isUploading}
-            onClick={() =>
-              router.push("/")
-            }
+            onClick={() => router.push("/")}
             className="text-sm font-bold text-zinc-400 transition hover:text-white disabled:opacity-40"
           >
             Cancel
@@ -929,12 +832,10 @@ export default function UploadMatchPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
-            Set up the match, starting lineup,
-            final result, jersey colors, and
-            original game videos. InsightFC
-            will turn the match into player
-            actions, stats, timestamps, and
-            clips.
+            Set up the match, starting lineup, final result,
+            jersey colors, and original game videos. InsightFC
+            will turn the match into player actions, stats,
+            timestamps, and clips.
           </p>
         </div>
 
@@ -977,14 +878,10 @@ export default function UploadMatchPage() {
                   loadingTeams ||
                   loadingScheduledGame ||
                   isUploading ||
-                  Boolean(
-                    scheduledGameId
-                  )
+                  Boolean(scheduledGameId)
                 }
                 onChange={(event) => {
-                  setTeamId(
-                    event.target.value
-                  );
+                  setTeamId(event.target.value);
                   setMessage("");
                 }}
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
@@ -996,10 +893,7 @@ export default function UploadMatchPage() {
                 </option>
 
                 {teams.map((team) => (
-                  <option
-                    key={team.id}
-                    value={team.id}
-                  >
+                  <option key={team.id} value={team.id}>
                     {team.name}
                     {team.season
                       ? ` — ${team.season}`
@@ -1018,9 +912,7 @@ export default function UploadMatchPage() {
                 value={opponent}
                 disabled={isUploading}
                 onChange={(event) =>
-                  setOpponent(
-                    event.target.value
-                  )
+                  setOpponent(event.target.value)
                 }
                 placeholder="e.g. Riverside U10"
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
@@ -1037,9 +929,7 @@ export default function UploadMatchPage() {
                 value={matchDate}
                 disabled={isUploading}
                 onChange={(event) =>
-                  setMatchDate(
-                    event.target.value
-                  )
+                  setMatchDate(event.target.value)
                 }
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               />
@@ -1051,16 +941,14 @@ export default function UploadMatchPage() {
               </div>
 
               <p className="mt-1 text-xs text-zinc-500">
-                Enter the result so your team
-                record and goals can update
-                immediately.
+                Enter the result so your team record and goals
+                can update immediately.
               </p>
 
               <div className="mt-4 flex flex-wrap items-center gap-4">
                 <div className="min-w-[130px] flex-1">
                   <div className="mb-2 truncate text-xs font-bold text-zinc-400">
-                    {selectedTeam?.name ||
-                      "Your Team"}
+                    {selectedTeam?.name || "Your Team"}
                   </div>
 
                   <input
@@ -1070,9 +958,7 @@ export default function UploadMatchPage() {
                     value={teamScore}
                     disabled={isUploading}
                     onChange={(event) =>
-                      setTeamScore(
-                        event.target.value
-                      )
+                      setTeamScore(event.target.value)
                     }
                     placeholder="0"
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-center text-xl font-black outline-none focus:border-yellow-400 disabled:opacity-50"
@@ -1085,22 +971,17 @@ export default function UploadMatchPage() {
 
                 <div className="min-w-[130px] flex-1">
                   <div className="mb-2 truncate text-xs font-bold text-zinc-400">
-                    {opponent.trim() ||
-                      "Opponent"}
+                    {opponent.trim() || "Opponent"}
                   </div>
 
                   <input
                     type="number"
                     min="0"
                     inputMode="numeric"
-                    value={
-                      opponentScore
-                    }
+                    value={opponentScore}
                     disabled={isUploading}
                     onChange={(event) =>
-                      setOpponentScore(
-                        event.target.value
-                      )
+                      setOpponentScore(event.target.value)
                     }
                     placeholder="0"
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-center text-xl font-black outline-none focus:border-yellow-400 disabled:opacity-50"
@@ -1115,19 +996,16 @@ export default function UploadMatchPage() {
               </div>
 
               <p className="mt-1 text-xs text-zinc-500">
-                Click either color square to
-                choose the jersey color worn
-                in this match.
+                Click either color square to choose the jersey
+                color worn in this match.
               </p>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <label className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 p-4">
                   <div>
                     <div className="text-sm font-bold">
-                      {selectedTeam?.name ||
-                        "Your Team"}
+                      {selectedTeam?.name || "Your Team"}
                     </div>
-
                     <div className="mt-1 text-xs text-zinc-500">
                       Team jersey
                     </div>
@@ -1137,21 +1015,15 @@ export default function UploadMatchPage() {
                     <div
                       className="h-11 w-11 rounded-lg border-2 border-white/30 shadow"
                       style={{
-                        backgroundColor:
-                          teamJerseyColor,
+                        backgroundColor: teamJerseyColor,
                       }}
                     />
-
                     <input
                       type="color"
-                      value={
-                        teamJerseyColor
-                      }
+                      value={teamJerseyColor}
                       disabled={isUploading}
                       onChange={(event) =>
-                        setTeamJerseyColor(
-                          event.target.value
-                        )
+                        setTeamJerseyColor(event.target.value)
                       }
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     />
@@ -1161,10 +1033,8 @@ export default function UploadMatchPage() {
                 <label className="flex cursor-pointer items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 p-4">
                   <div>
                     <div className="text-sm font-bold">
-                      {opponent.trim() ||
-                        "Opponent"}
+                      {opponent.trim() || "Opponent"}
                     </div>
-
                     <div className="mt-1 text-xs text-zinc-500">
                       Opponent jersey
                     </div>
@@ -1178,12 +1048,9 @@ export default function UploadMatchPage() {
                           opponentJerseyColor,
                       }}
                     />
-
                     <input
                       type="color"
-                      value={
-                        opponentJerseyColor
-                      }
+                      value={opponentJerseyColor}
                       disabled={isUploading}
                       onChange={(event) =>
                         setOpponentJerseyColor(
@@ -1202,19 +1069,13 @@ export default function UploadMatchPage() {
                 Home / Away
               </span>
 
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  "home",
-                  "away",
-                  "neutral",
-                ].map((option) => (
+              <div className="grid grid-cols-2 gap-2">
+                {["home", "away"].map((option) => (
                   <button
                     key={option}
                     type="button"
                     disabled={isUploading}
-                    onClick={() =>
-                      setHomeAway(option)
-                    }
+                    onClick={() => setHomeAway(option)}
                     className={`rounded-xl border px-3 py-3 text-xs font-bold uppercase disabled:opacity-50 ${
                       homeAway === option
                         ? "border-yellow-400 bg-yellow-400 text-black"
@@ -1233,22 +1094,14 @@ export default function UploadMatchPage() {
               </span>
 
               <div className="grid grid-cols-2 gap-2">
-                {[
-                  "Outdoor",
-                  "Indoor",
-                ].map((option) => (
+                {["Outdoor", "Indoor"].map((option) => (
                   <button
                     key={option}
                     type="button"
                     disabled={isUploading}
-                    onClick={() =>
-                      setEnvironment(
-                        option
-                      )
-                    }
+                    onClick={() => setEnvironment(option)}
                     className={`rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50 ${
-                      environment ===
-                      option
+                      environment === option
                         ? "border-yellow-400 bg-yellow-400 text-black"
                         : "border-zinc-800 bg-zinc-900 text-zinc-300"
                     }`}
@@ -1268,19 +1121,13 @@ export default function UploadMatchPage() {
                 value={matchType}
                 disabled={isUploading}
                 onChange={(event) =>
-                  setMatchType(
-                    event.target.value
-                  )
+                  setMatchType(event.target.value)
                 }
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               >
                 <option>League</option>
-                <option>
-                  Tournament
-                </option>
-                <option>
-                  Scrimmage
-                </option>
+                <option>Tournament</option>
+                <option>Scrimmage</option>
               </select>
             </label>
 
@@ -1293,9 +1140,7 @@ export default function UploadMatchPage() {
                 value={location}
                 disabled={isUploading}
                 onChange={(event) =>
-                  setLocation(
-                    event.target.value
-                  )
+                  setLocation(event.target.value)
                 }
                 placeholder="e.g. Oakland Yard"
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
@@ -1311,30 +1156,16 @@ export default function UploadMatchPage() {
                 value={halfLength}
                 disabled={isUploading}
                 onChange={(event) =>
-                  setHalfLength(
-                    event.target.value
-                  )
+                  setHalfLength(event.target.value)
                 }
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 disabled:opacity-50"
               >
-                <option value="20">
-                  20 minutes
-                </option>
-                <option value="25">
-                  25 minutes
-                </option>
-                <option value="30">
-                  30 minutes
-                </option>
-                <option value="35">
-                  35 minutes
-                </option>
-                <option value="40">
-                  40 minutes
-                </option>
-                <option value="45">
-                  45 minutes
-                </option>
+                <option value="20">20 minutes</option>
+                <option value="25">25 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="35">35 minutes</option>
+                <option value="40">40 minutes</option>
+                <option value="45">45 minutes</option>
               </select>
             </label>
 
@@ -1342,21 +1173,17 @@ export default function UploadMatchPage() {
               <div className="text-sm font-semibold">
                 Match Format
               </div>
-
               <div className="mt-1 text-sm text-zinc-400">
-                2 halves • {halfLength}{" "}
-                minutes each
+                2 halves • {halfLength} minutes each
               </div>
-
               <div className="mt-1 text-xs text-zinc-500">
-                {environment} •{" "}
-                {matchType} •{" "}
-                {homeAway}
+                {environment} • {matchType} • {homeAway}
               </div>
             </div>
           </div>
         </section>
-                {/* STEP 2 */}
+
+        {/* STEP 2 */}
 
         <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 md:p-6">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -1364,46 +1191,39 @@ export default function UploadMatchPage() {
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 2
               </div>
-
               <h2 className="mt-1 text-xl font-bold">
                 Starting Lineup
               </h2>
-
               <p className="mt-2 text-sm text-zinc-400">
-                Choose the match format, add starters
-                from your saved roster, then position
-                them anywhere on the field.
+                Choose the match format, add starters from your
+                saved roster, then position them anywhere on
+                the field.
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex rounded-xl border border-zinc-800 bg-black p-1">
-                {([7, 9, 11] as GameSize[]).map(
-                  (size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      disabled={isUploading}
-                      onClick={() =>
-                        changeGameSize(size)
-                      }
-                      className={`rounded-lg px-4 py-2 text-xs font-black transition disabled:opacity-50 ${
-                        gameSize === size
-                          ? "bg-yellow-400 text-black"
-                          : "text-zinc-400 hover:text-white"
-                      }`}
-                    >
-                      {size}v{size}
-                    </button>
-                  )
-                )}
+                {([7, 9, 11] as GameSize[]).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => changeGameSize(size)}
+                    className={`rounded-lg px-4 py-2 text-xs font-black transition disabled:opacity-50 ${
+                      gameSize === size
+                        ? "bg-yellow-400 text-black"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    {size}v{size}
+                  </button>
+                ))}
               </div>
 
               <div className="rounded-full border border-zinc-800 bg-black px-4 py-2 text-sm font-bold">
                 <span className="text-yellow-400">
                   {lineup.length}
                 </span>
-
                 <span className="text-zinc-500">
                   {" "}
                   / {gameSize} starters
@@ -1417,7 +1237,6 @@ export default function UploadMatchPage() {
               <div className="font-bold">
                 Choose a team first
               </div>
-
               <div className="mt-2 text-sm text-zinc-500">
                 Your saved roster will appear here.
               </div>
@@ -1451,9 +1270,7 @@ export default function UploadMatchPage() {
                         disabled={isUploading}
                         onClick={(event) => {
                           event.stopPropagation();
-                          setSelectedPlayerId(
-                            player.id
-                          );
+                          setSelectedPlayerId(player.id);
                         }}
                         style={{
                           left: `${player.x}%`,
@@ -1490,10 +1307,9 @@ export default function UploadMatchPage() {
                         <div className="font-bold">
                           Add players from your roster →
                         </div>
-
                         <div className="mt-1 text-xs text-zinc-400">
-                          Then position them anywhere on
-                          the field.
+                          Then position them anywhere on the
+                          field.
                         </div>
                       </div>
                     </div>
@@ -1514,9 +1330,7 @@ export default function UploadMatchPage() {
                     <button
                       type="button"
                       disabled={isUploading}
-                      onClick={() =>
-                        setSelectedPlayerId(null)
-                      }
+                      onClick={() => setSelectedPlayerId(null)}
                       className="text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-50"
                     >
                       Done
@@ -1531,12 +1345,10 @@ export default function UploadMatchPage() {
                     <div className="font-bold">
                       Saved Roster
                     </div>
-
                     <div className="mt-1 text-xs text-zinc-500">
                       Tap + to add a starter
                     </div>
                   </div>
-
                   <div className="text-xs text-zinc-500">
                     {bench.length} available
                   </div>
@@ -1547,10 +1359,9 @@ export default function UploadMatchPage() {
                     <div className="text-sm font-bold">
                       No active players yet
                     </div>
-
                     <div className="mt-2 text-xs leading-5 text-zinc-500">
-                      Add players to this team's roster
-                      before building the starting lineup.
+                      Add players to this team's roster before
+                      building the starting lineup.
                     </div>
                   </div>
                 ) : (
@@ -1568,7 +1379,6 @@ export default function UploadMatchPage() {
                           <div className="truncate text-sm font-bold">
                             {player.name}
                           </div>
-
                           <div className="text-xs text-zinc-500">
                             {player.position} • Starter
                           </div>
@@ -1600,7 +1410,6 @@ export default function UploadMatchPage() {
                           <div className="truncate text-sm font-bold">
                             {player.name}
                           </div>
-
                           <div className="text-xs text-zinc-500">
                             {player.position}
                           </div>
@@ -1608,9 +1417,7 @@ export default function UploadMatchPage() {
 
                         <button
                           type="button"
-                          onClick={() =>
-                            addStarter(player)
-                          }
+                          onClick={() => addStarter(player)}
                           disabled={
                             lineup.length >= gameSize ||
                             isUploading
@@ -1636,7 +1443,6 @@ export default function UploadMatchPage() {
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
                 Step 3
               </div>
-
               <h2 className="mt-1 text-xl font-bold">
                 Match Videos
               </h2>
@@ -1664,9 +1470,9 @@ export default function UploadMatchPage() {
             </div>
 
             <div className="mt-2 max-w-sm text-sm leading-5 text-zinc-500">
-              Select 1–4 original videos from your phone
-              or XbotGo. You do not need to combine
-              multiple files first.
+              Select 1–4 original videos from your phone or
+              XbotGo. You do not need to combine multiple
+              files first.
             </div>
 
             <input
@@ -1729,9 +1535,7 @@ export default function UploadMatchPage() {
                         </span>
 
                         {video.status === "ready" && (
-                          <span>
-                            Ready to upload
-                          </span>
+                          <span>Ready to upload</span>
                         )}
 
                         {video.status === "uploading" && (
@@ -1782,12 +1586,8 @@ export default function UploadMatchPage() {
                           }
                           className="rounded-lg border border-zinc-700 bg-black px-3 py-2 text-xs font-semibold disabled:opacity-50"
                         >
-                          <option>
-                            First Half
-                          </option>
-                          <option>
-                            Second Half
-                          </option>
+                          <option>First Half</option>
+                          <option>Second Half</option>
                         </select>
 
                         <button
@@ -1796,8 +1596,7 @@ export default function UploadMatchPage() {
                             moveVideo(index, -1)
                           }
                           disabled={
-                            index === 0 ||
-                            isUploading
+                            index === 0 || isUploading
                           }
                           className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-30"
                         >
@@ -1830,10 +1629,10 @@ export default function UploadMatchPage() {
             </div>
 
             <p className="mt-1 text-xs leading-5 text-zinc-500">
-              Your original match footage will be stored
-              in InsightFC&apos;s private match-video
-              storage. Multiple recordings will ultimately
-              be treated as one continuous match.
+              Your original match footage will be stored in
+              InsightFC&apos;s private match-video storage.
+              Multiple recordings will ultimately be treated
+              as one continuous match.
             </p>
           </div>
         </section>
@@ -1852,11 +1651,10 @@ export default function UploadMatchPage() {
               </h2>
 
               <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-                InsightFC will save the match result,
-                securely upload the match videos, then
-                prepare the footage for player
-                identification, actions, stats, timestamps,
-                and clips.
+                InsightFC will save the match result, securely
+                upload the match videos, then prepare the
+                footage for player identification, actions,
+                stats, timestamps, and clips.
               </p>
 
               {isUploading && (
@@ -1865,7 +1663,6 @@ export default function UploadMatchPage() {
                     <span className="text-yellow-400">
                       Uploading match footage
                     </span>
-
                     <span className="text-zinc-500">
                       {currentUpload} / {videos.length}
                     </span>
