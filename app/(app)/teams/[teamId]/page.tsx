@@ -30,21 +30,30 @@ export default function TeamHomePage() {
         setLoading(true);
         setError(null);
 
-        // Load the team
-        const { data: teamData, error: teamError } = await supabase
-          .from("teams")
-          .select("id,name,season")
-          .eq("id", teamId)
-          .single();
+        const { data: teamData, error: teamError } =
+          await supabase
+            .from("teams")
+            .select("id,name,season")
+            .eq("id", teamId)
+            .single();
 
         if (teamError) {
-          throw teamError;
+          console.error("TEAM QUERY ERROR:", teamError);
+
+          throw new Error(
+            teamError.message ||
+              teamError.details ||
+              teamError.hint ||
+              JSON.stringify(teamError)
+          );
+        }
+
+        if (!teamData) {
+          throw new Error("Team record was not returned.");
         }
 
         setTeam(teamData as Team);
 
-        // Load players through the authenticated API.
-        // If this fails, the overview still loads.
         try {
           const response = await fetch(
             `/api/players?teamId=${encodeURIComponent(teamId)}`,
@@ -58,16 +67,26 @@ export default function TeamHomePage() {
           if (response.ok && result.ok) {
             setPlayers(result.data ?? []);
           } else {
+            console.error(
+              "PLAYER API ERROR:",
+              result?.error || result
+            );
+
             setPlayers([]);
           }
-        } catch {
+        } catch (playerError) {
+          console.error("PLAYER LOAD ERROR:", playerError);
           setPlayers([]);
         }
-      } catch (err) {
+      } catch (err: any) {
+        console.error("TEAM OVERVIEW ERROR:", err);
+
         setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load team overview."
+          err?.message ||
+            err?.details ||
+            err?.hint ||
+            JSON.stringify(err) ||
+            "Failed to load team overview."
         );
       } finally {
         setLoading(false);
@@ -89,8 +108,14 @@ export default function TeamHomePage() {
 
   if (error || !team) {
     return (
-      <div className="card border-red-500/20 text-red-300">
-        {error || "Team not found."}
+      <div className="card border-red-500/20">
+        <p className="font-bold text-red-300">
+          Team overview could not load
+        </p>
+
+        <p className="mt-2 break-words text-sm text-red-200">
+          {error || "Team not found."}
+        </p>
       </div>
     );
   }
@@ -155,7 +180,9 @@ export default function TeamHomePage() {
         <div>
           <div className="eyebrow">Team overview</div>
 
-          <h1 className="page-title mt-2">{team.name}</h1>
+          <h1 className="page-title mt-2">
+            {team.name}
+          </h1>
 
           <p className="muted mt-2">
             {team.season || "Current season"} · Performance dashboard
@@ -186,7 +213,9 @@ export default function TeamHomePage() {
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <div className="eyebrow">Season snapshot</div>
+            <div className="eyebrow">
+              Season snapshot
+            </div>
 
             <h2 className="mt-2 text-xl font-bold text-white">
               Team Performance
@@ -200,7 +229,10 @@ export default function TeamHomePage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {stats.map((stat) => (
-            <div key={stat.label} className="stat-card">
+            <div
+              key={stat.label}
+              className="stat-card"
+            >
               <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
                 {stat.label}
               </p>
@@ -221,7 +253,9 @@ export default function TeamHomePage() {
         <section className="card">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="eyebrow">Schedule</div>
+              <div className="eyebrow">
+                Schedule
+              </div>
 
               <h2 className="mt-2 text-xl font-bold text-white">
                 Upcoming Matches
@@ -246,8 +280,9 @@ export default function TeamHomePage() {
             </h3>
 
             <p className="muted mx-auto mt-2 max-w-md text-sm">
-              Add your next fixture so your upcoming schedule is
-              easy to find from the team dashboard.
+              Add your next fixture so your upcoming
+              schedule is easy to find from the team
+              dashboard.
             </p>
 
             <Link
@@ -260,7 +295,9 @@ export default function TeamHomePage() {
         </section>
 
         <section className="card">
-          <div className="eyebrow">Roster</div>
+          <div className="eyebrow">
+            Roster
+          </div>
 
           <div className="mt-2 flex items-end justify-between">
             <div>
@@ -318,7 +355,9 @@ export default function TeamHomePage() {
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="eyebrow">Player development</div>
+            <div className="eyebrow">
+              Player development
+            </div>
 
             <h2 className="mt-2 text-xl font-bold text-white">
               Player Leaders
@@ -357,16 +396,20 @@ export default function TeamHomePage() {
 
         <div className="mt-5 rounded-xl border border-dashed border-white/10 px-5 py-5 text-center">
           <p className="font-semibold text-white">
-            Analyze your first match to unlock player leaders
+            Analyze your first match to unlock
+            player leaders
           </p>
 
           <p className="muted mx-auto mt-1 max-w-xl text-sm">
-            InsightFC will surface player performance across passing,
-            touches, shooting, crosses, take-ons, and other
-            development actions.
+            InsightFC will surface player performance
+            across passing, touches, shooting, crosses,
+            take-ons, and other development actions.
           </p>
 
-          <Link href="/upload" className="btn-yellow mt-4">
+          <Link
+            href="/upload"
+            className="btn-yellow mt-4"
+          >
             Upload First Match
           </Link>
         </div>
@@ -376,7 +419,9 @@ export default function TeamHomePage() {
         <section className="card">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="eyebrow">Match history</div>
+              <div className="eyebrow">
+                Match history
+              </div>
 
               <h2 className="mt-2 text-xl font-bold text-white">
                 Recent Matches
@@ -397,14 +442,17 @@ export default function TeamHomePage() {
             </p>
 
             <p className="muted mx-auto mt-2 max-w-md text-sm">
-              Completed matches and team performance trends will
-              appear here after your first analysis.
+              Completed matches and team performance
+              trends will appear here after your first
+              analysis.
             </p>
           </div>
         </section>
 
         <aside className="card">
-          <div className="eyebrow">Quick actions</div>
+          <div className="eyebrow">
+            Quick actions
+          </div>
 
           <div className="mt-4 space-y-2">
             <Link
