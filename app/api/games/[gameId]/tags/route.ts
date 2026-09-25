@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 type Params = {
   gameId: string;
@@ -12,6 +12,27 @@ export async function GET(
   try {
     const { gameId } = await ctx.params;
 
+    if (!gameId) {
+      return NextResponse.json(
+        { ok: false, error: "Game ID is required." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { ok: false, error: "You must be signed in." },
+        { status: 401 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("tags")
       .select("*")
@@ -22,10 +43,7 @@ export async function GET(
 
     if (error) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-        },
+        { ok: false, error: error.message },
         { status: 500 }
       );
     }
@@ -34,11 +52,16 @@ export async function GET(
       ok: true,
       data: data ?? [],
     });
-  } catch (error: any) {
+  } catch (error) {
+    console.error("GET /api/games/[gameId]/tags failed:", error);
+
     return NextResponse.json(
       {
         ok: false,
-        error: error?.message || "Failed to load tags",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load tags.",
       },
       { status: 500 }
     );
@@ -51,14 +74,33 @@ export async function POST(
 ) {
   try {
     const { gameId } = await ctx.params;
+
+    if (!gameId) {
+      return NextResponse.json(
+        { ok: false, error: "Game ID is required." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { ok: false, error: "You must be signed in." },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json().catch(() => null);
 
     if (!body) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Invalid request body",
-        },
+        { ok: false, error: "Invalid request body." },
         { status: 400 }
       );
     }
@@ -91,10 +133,7 @@ export async function POST(
 
     if (!label) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Tag label is required",
-        },
+        { ok: false, error: "Tag label is required." },
         { status: 400 }
       );
     }
@@ -114,10 +153,7 @@ export async function POST(
 
     if (error) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-        },
+        { ok: false, error: error.message },
         { status: 500 }
       );
     }
@@ -126,11 +162,16 @@ export async function POST(
       ok: true,
       data,
     });
-  } catch (error: any) {
+  } catch (error) {
+    console.error("POST /api/games/[gameId]/tags failed:", error);
+
     return NextResponse.json(
       {
         ok: false,
-        error: error?.message || "Failed to create tag",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to create tag.",
       },
       { status: 500 }
     );
