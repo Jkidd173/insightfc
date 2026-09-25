@@ -30,24 +30,39 @@ export default function TeamHomePage() {
         setLoading(true);
         setError(null);
 
+        // Load the team
         const { data: teamData, error: teamError } = await supabase
           .from("teams")
           .select("id,name,season")
           .eq("id", teamId)
           .single();
 
-        if (teamError) throw teamError;
-
-        const { data: playerData, error: playerError } =
-          await supabase
-            .from("players")
-            .select("id,status")
-            .eq("team_id", teamId);
-
-        if (playerError) throw playerError;
+        if (teamError) {
+          throw teamError;
+        }
 
         setTeam(teamData as Team);
-        setPlayers((playerData ?? []) as Player[]);
+
+        // Load players through the authenticated API.
+        // If this fails, the overview still loads.
+        try {
+          const response = await fetch(
+            `/api/players?teamId=${encodeURIComponent(teamId)}`,
+            {
+              cache: "no-store",
+            }
+          );
+
+          const result = await response.json();
+
+          if (response.ok && result.ok) {
+            setPlayers(result.data ?? []);
+          } else {
+            setPlayers([]);
+          }
+        } catch {
+          setPlayers([]);
+        }
       } catch (err) {
         setError(
           err instanceof Error
@@ -59,7 +74,9 @@ export default function TeamHomePage() {
       }
     }
 
-    loadTeamOverview();
+    if (teamId) {
+      loadTeamOverview();
+    }
   }, [teamId]);
 
   if (loading) {
@@ -170,6 +187,7 @@ export default function TeamHomePage() {
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
             <div className="eyebrow">Season snapshot</div>
+
             <h2 className="mt-2 text-xl font-bold text-white">
               Team Performance
             </h2>
@@ -204,6 +222,7 @@ export default function TeamHomePage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="eyebrow">Schedule</div>
+
               <h2 className="mt-2 text-xl font-bold text-white">
                 Upcoming Matches
               </h2>
@@ -270,6 +289,7 @@ export default function TeamHomePage() {
               <div className="text-2xl font-black text-white">
                 {activePlayers}
               </div>
+
               <div className="mt-1 text-xs text-zinc-500">
                 Active players
               </div>
@@ -279,6 +299,7 @@ export default function TeamHomePage() {
               <div className="text-2xl font-black text-white">
                 {guestPlayers}
               </div>
+
               <div className="mt-1 text-xs text-zinc-500">
                 Guest players
               </div>
@@ -298,9 +319,11 @@ export default function TeamHomePage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="eyebrow">Player development</div>
+
             <h2 className="mt-2 text-xl font-bold text-white">
               Player Leaders
             </h2>
+
             <p className="muted mt-1 text-sm">
               Top performers across key development metrics.
             </p>
@@ -354,6 +377,7 @@ export default function TeamHomePage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="eyebrow">Match history</div>
+
               <h2 className="mt-2 text-xl font-bold text-white">
                 Recent Matches
               </h2>
