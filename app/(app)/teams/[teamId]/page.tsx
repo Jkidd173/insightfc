@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Team = {
   id: string;
@@ -15,11 +16,26 @@ type Player = {
   status: string | null;
 };
 
+type Game = {
+  id: string;
+  team_id: string;
+  opponent: string | null;
+  date: string | null;
+  time: string | null;
+  status: string | null;
+  type: string | null;
+  location: string | null;
+  home_away: string | null;
+  team_score: number | null;
+  opponent_score: number | null;
+};
+
 export default function TeamHomePage() {
   const { teamId } = useParams() as { teamId: string };
 
   const [team, setTeam] = useState<Team | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +85,29 @@ export default function TeamHomePage() {
         } catch {
           setPlayers([]);
         }
+
+        try {
+          const supabase = supabaseBrowser();
+
+          const { data: gamesData, error: gamesError } =
+            await supabase
+              .from("games")
+              .select(
+                "id,team_id,opponent,date,time,status,type,location,home_away,team_score,opponent_score"
+              )
+              .eq("team_id", teamId)
+              .order("date", { ascending: false });
+
+          if (gamesError) {
+            console.error("Unable to load games:", gamesError);
+            setGames([]);
+          } else {
+            setGames((gamesData ?? []) as Game[]);
+          }
+        } catch (gamesError) {
+          console.error("Unable to load games:", gamesError);
+          setGames([]);
+        }
       } catch (err) {
         setError(
           err instanceof Error
@@ -114,31 +153,90 @@ export default function TeamHomePage() {
     (player) => player.status === "guest"
   ).length;
 
+  /*
+   * A game counts toward the season record as soon as both
+   * scores have been entered. Video analysis does not need
+   * to be complete.
+   */
+  const gamesWithResults = games.filter(
+    (game) =>
+      game.team_score !== null &&
+      game.opponent_score !== null
+  );
+
+  const wins = gamesWithResults.filter(
+    (game) =>
+      Number(game.team_score) > Number(game.opponent_score)
+  ).length;
+
+  const losses = gamesWithResults.filter(
+    (game) =>
+      Number(game.team_score) < Number(game.opponent_score)
+  ).length;
+
+  const draws = gamesWithResults.filter(
+    (game) =>
+      Number(game.team_score) === Number(game.opponent_score)
+  ).length;
+
+  const goalsFor = gamesWithResults.reduce(
+    (total, game) => total + Number(game.team_score ?? 0),
+    0
+  );
+
+  const goalsAgainst = gamesWithResults.reduce(
+    (total, game) =>
+      total + Number(game.opponent_score ?? 0),
+    0
+  );
+
+  const upcomingGames = games
+    .filter(
+      (game) =>
+        game.team_score === null ||
+        game.opponent_score === null
+    )
+    .sort((a, b) =>
+      String(a.date ?? "").localeCompare(String(b.date ?? ""))
+    )
+    .slice(0, 3);
+
+  const recentResults = [...gamesWithResults]
+    .sort((a, b) =>
+      String(b.date ?? "").localeCompare(String(a.date ?? ""))
+    )
+    .slice(0, 5);
+
   const stats = [
     {
       label: "Season Record",
-      value: "0-0-0",
+      value: `${wins}-${losses}-${draws}`,
       detail: "W - L - D",
     },
     {
-      label: "Goals",
-      value: "0",
+      label: "Goals For",
+      value: String(goalsFor),
+      detail: "This season",
+    },
+    {
+      label: "Goals Against",
+      value: String(goalsAgainst),
       detail: "This season",
     },
     {
       label: "Shots",
       value: "0",
-      detail: "This season",
+      detail: "Awaiting analysis",
     },
     {
       label: "Possession",
       value: "0%",
-      detail: "Average",
+      detail: "Awaiting analysis",
     },
     {
       label: "Passes Completed",
       value: "0",
-      detail: "This season",
+      detail: "Awaiting analysis",
     },
     {
       label: "Active Players",
@@ -159,6 +257,24 @@ export default function TeamHomePage() {
     "Crosses",
     "Take-ons",
   ];
+
+  function formatDate(date: string | null) {
+    if (!date) {
+      return "Date TBD";
+    }
+
+    const parsed = new Date(`${date}T00:00:00`);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return date;
+    }
+
+    return parsed.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -208,7 +324,7 @@ export default function TeamHomePage() {
           </span>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {stats.map((stat) => (
             <div key={stat.label} className="stat-card">
               <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
@@ -245,27 +361,55 @@ export default function TeamHomePage() {
             </Link>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-yellow-400/20 bg-yellow-400/10 text-xl font-black text-yellow-300">
-              +
+          {upcomingGames.length > 0 ? (
+            <div className="mt-6 space-y-3">
+              {upcomingGames.map((game) => (
+                <div
+                  key={game.id}
+                  className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-bold text-white">
+                      {game.home_away === "away"
+                        ? `${game.opponent || "Opponent"} vs ${team.name}`
+                        : `${team.name} vs ${game.opponent || "Opponent"}`}
+                    </p>
+
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {formatDate(game.date)}
+                      {game.time ? ` · ${game.time}` : ""}
+                    </p>
+                  </div>
+
+                  <div className="text-sm text-zinc-400">
+                    {game.type || "Match"}
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : (
+            <div className="mt-6 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-yellow-400/20 bg-yellow-400/10 text-xl font-black text-yellow-300">
+                +
+              </div>
 
-            <h3 className="mt-4 text-lg font-bold text-white">
-              No upcoming matches yet
-            </h3>
+              <h3 className="mt-4 text-lg font-bold text-white">
+                No upcoming matches yet
+              </h3>
 
-            <p className="muted mx-auto mt-2 max-w-md text-sm">
-              Add your next fixture so your upcoming schedule is easy
-              to find from the team dashboard.
-            </p>
+              <p className="muted mx-auto mt-2 max-w-md text-sm">
+                Add your next fixture so your upcoming schedule is easy
+                to find from the team dashboard.
+              </p>
 
-            <Link
-              href={`/teams/${teamId}/schedule`}
-              className="btn-yellow mt-5"
-            >
-              + Schedule Match
-            </Link>
-          </div>
+              <Link
+                href={`/teams/${teamId}/schedule`}
+                className="btn-yellow mt-5"
+              >
+                + Schedule Match
+              </Link>
+            </div>
+          )}
         </section>
 
         <section className="card">
@@ -393,16 +537,70 @@ export default function TeamHomePage() {
             </Link>
           </div>
 
-          <div className="mt-6 rounded-xl border border-dashed border-white/10 px-5 py-9 text-center">
-            <p className="font-semibold text-white">
-              No matches analyzed yet
-            </p>
+          {recentResults.length > 0 ? (
+            <div className="mt-6 space-y-3">
+              {recentResults.map((game) => {
+                const teamScore = Number(game.team_score ?? 0);
+                const opponentScore = Number(
+                  game.opponent_score ?? 0
+                );
 
-            <p className="muted mx-auto mt-2 max-w-md text-sm">
-              Completed matches and team performance trends will
-              appear here after your first analysis.
-            </p>
-          </div>
+                const result =
+                  teamScore > opponentScore
+                    ? "W"
+                    : teamScore < opponentScore
+                    ? "L"
+                    : "D";
+
+                return (
+                  <div
+                    key={game.id}
+                    className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm font-black text-white">
+                          {result}
+                        </span>
+
+                        <div>
+                          <p className="font-bold text-white">
+                            {game.opponent || "Opponent"}
+                          </p>
+
+                          <p className="mt-1 text-xs text-zinc-500">
+                            {formatDate(game.date)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-left sm:text-right">
+                      <div className="text-xl font-black text-white">
+                        {teamScore} - {opponentScore}
+                      </div>
+
+                      <div className="mt-1 text-xs text-zinc-500">
+                        Result submitted
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-6 rounded-xl border border-dashed border-white/10 px-5 py-9 text-center">
+              <p className="font-semibold text-white">
+                No match results yet
+              </p>
+
+              <p className="muted mx-auto mt-2 max-w-md text-sm">
+                Match results will appear here as soon as a match is
+                submitted. Player analysis can continue processing
+                separately.
+              </p>
+            </div>
+          )}
         </section>
 
         <aside className="card">
