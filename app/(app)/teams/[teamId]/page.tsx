@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
 
 type Team = {
   id: string;
@@ -25,68 +24,56 @@ export default function TeamHomePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadTeamOverview() {
+    async function loadOverview() {
       try {
         setLoading(true);
         setError(null);
 
-        const { data: teamData, error: teamError } =
-          await supabase
-            .from("teams")
-            .select("id,name,season")
-            .eq("id", teamId)
-            .single();
+        const teamsResponse = await fetch("/api/teams", {
+          cache: "no-store",
+        });
 
-        if (teamError) {
-          console.error("TEAM QUERY ERROR:", teamError);
+        const teamsResult = await teamsResponse.json();
 
+        if (!teamsResponse.ok || !teamsResult.ok) {
           throw new Error(
-            teamError.message ||
-              teamError.details ||
-              teamError.hint ||
-              JSON.stringify(teamError)
+            teamsResult.error || "Unable to load teams."
           );
         }
 
-        if (!teamData) {
-          throw new Error("Team record was not returned.");
+        const matchingTeam = (teamsResult.data ?? []).find(
+          (item: Team) => item.id === teamId
+        );
+
+        if (!matchingTeam) {
+          throw new Error("Team not found.");
         }
 
-        setTeam(teamData as Team);
+        setTeam(matchingTeam);
 
         try {
-          const response = await fetch(
+          const playersResponse = await fetch(
             `/api/players?teamId=${encodeURIComponent(teamId)}`,
             {
               cache: "no-store",
             }
           );
 
-          const result = await response.json();
+          const playersResult = await playersResponse.json();
 
-          if (response.ok && result.ok) {
-            setPlayers(result.data ?? []);
+          if (playersResponse.ok && playersResult.ok) {
+            setPlayers(playersResult.data ?? []);
           } else {
-            console.error(
-              "PLAYER API ERROR:",
-              result?.error || result
-            );
-
             setPlayers([]);
           }
-        } catch (playerError) {
-          console.error("PLAYER LOAD ERROR:", playerError);
+        } catch {
           setPlayers([]);
         }
-      } catch (err: any) {
-        console.error("TEAM OVERVIEW ERROR:", err);
-
+      } catch (err) {
         setError(
-          err?.message ||
-            err?.details ||
-            err?.hint ||
-            JSON.stringify(err) ||
-            "Failed to load team overview."
+          err instanceof Error
+            ? err.message
+            : "Unable to load team overview."
         );
       } finally {
         setLoading(false);
@@ -94,7 +81,7 @@ export default function TeamHomePage() {
     }
 
     if (teamId) {
-      loadTeamOverview();
+      loadOverview();
     }
   }, [teamId]);
 
@@ -112,8 +99,7 @@ export default function TeamHomePage() {
         <p className="font-bold text-red-300">
           Team overview could not load
         </p>
-
-        <p className="mt-2 break-words text-sm text-red-200">
+        <p className="mt-2 text-sm text-red-200">
           {error || "Team not found."}
         </p>
       </div>
@@ -180,9 +166,7 @@ export default function TeamHomePage() {
         <div>
           <div className="eyebrow">Team overview</div>
 
-          <h1 className="page-title mt-2">
-            {team.name}
-          </h1>
+          <h1 className="page-title mt-2">{team.name}</h1>
 
           <p className="muted mt-2">
             {team.season || "Current season"} · Performance dashboard
@@ -213,10 +197,7 @@ export default function TeamHomePage() {
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <div className="eyebrow">
-              Season snapshot
-            </div>
-
+            <div className="eyebrow">Season snapshot</div>
             <h2 className="mt-2 text-xl font-bold text-white">
               Team Performance
             </h2>
@@ -229,10 +210,7 @@ export default function TeamHomePage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="stat-card"
-            >
+            <div key={stat.label} className="stat-card">
               <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
                 {stat.label}
               </p>
@@ -253,10 +231,7 @@ export default function TeamHomePage() {
         <section className="card">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="eyebrow">
-                Schedule
-              </div>
-
+              <div className="eyebrow">Schedule</div>
               <h2 className="mt-2 text-xl font-bold text-white">
                 Upcoming Matches
               </h2>
@@ -280,9 +255,8 @@ export default function TeamHomePage() {
             </h3>
 
             <p className="muted mx-auto mt-2 max-w-md text-sm">
-              Add your next fixture so your upcoming
-              schedule is easy to find from the team
-              dashboard.
+              Add your next fixture so your upcoming schedule is easy
+              to find from the team dashboard.
             </p>
 
             <Link
@@ -295,16 +269,13 @@ export default function TeamHomePage() {
         </section>
 
         <section className="card">
-          <div className="eyebrow">
-            Roster
-          </div>
+          <div className="eyebrow">Roster</div>
 
           <div className="mt-2 flex items-end justify-between">
             <div>
               <h2 className="text-xl font-bold text-white">
                 Team Players
               </h2>
-
               <p className="muted mt-1 text-sm">
                 Current active roster
               </p>
@@ -314,7 +285,6 @@ export default function TeamHomePage() {
               <div className="text-4xl font-black text-white">
                 {activePlayers}
               </div>
-
               <div className="mt-1 text-xs font-bold uppercase tracking-wider text-zinc-500">
                 Active
               </div>
@@ -326,7 +296,6 @@ export default function TeamHomePage() {
               <div className="text-2xl font-black text-white">
                 {activePlayers}
               </div>
-
               <div className="mt-1 text-xs text-zinc-500">
                 Active players
               </div>
@@ -336,7 +305,6 @@ export default function TeamHomePage() {
               <div className="text-2xl font-black text-white">
                 {guestPlayers}
               </div>
-
               <div className="mt-1 text-xs text-zinc-500">
                 Guest players
               </div>
@@ -355,14 +323,10 @@ export default function TeamHomePage() {
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="eyebrow">
-              Player development
-            </div>
-
+            <div className="eyebrow">Player development</div>
             <h2 className="mt-2 text-xl font-bold text-white">
               Player Leaders
             </h2>
-
             <p className="muted mt-1 text-sm">
               Top performers across key development metrics.
             </p>
@@ -396,20 +360,16 @@ export default function TeamHomePage() {
 
         <div className="mt-5 rounded-xl border border-dashed border-white/10 px-5 py-5 text-center">
           <p className="font-semibold text-white">
-            Analyze your first match to unlock
-            player leaders
+            Analyze your first match to unlock player leaders
           </p>
 
           <p className="muted mx-auto mt-1 max-w-xl text-sm">
-            InsightFC will surface player performance
-            across passing, touches, shooting, crosses,
-            take-ons, and other development actions.
+            InsightFC will surface player performance across passing,
+            touches, shooting, crosses, take-ons, and other
+            development actions.
           </p>
 
-          <Link
-            href="/upload"
-            className="btn-yellow mt-4"
-          >
+          <Link href="/upload" className="btn-yellow mt-4">
             Upload First Match
           </Link>
         </div>
@@ -419,10 +379,7 @@ export default function TeamHomePage() {
         <section className="card">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="eyebrow">
-                Match history
-              </div>
-
+              <div className="eyebrow">Match history</div>
               <h2 className="mt-2 text-xl font-bold text-white">
                 Recent Matches
               </h2>
@@ -442,17 +399,14 @@ export default function TeamHomePage() {
             </p>
 
             <p className="muted mx-auto mt-2 max-w-md text-sm">
-              Completed matches and team performance
-              trends will appear here after your first
-              analysis.
+              Completed matches and team performance trends will
+              appear here after your first analysis.
             </p>
           </div>
         </section>
 
         <aside className="card">
-          <div className="eyebrow">
-            Quick actions
-          </div>
+          <div className="eyebrow">Quick actions</div>
 
           <div className="mt-4 space-y-2">
             <Link
