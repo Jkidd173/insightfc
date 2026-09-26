@@ -116,6 +116,8 @@ const FIELD_ZONES = [
   },
 ] as const;
 
+const TRIM_AMOUNTS = [-2, -1, -0.5, 0.5, 1, 2];
+
 function numberValue(value: number | string) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -132,6 +134,10 @@ function formatTime(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${secs
     .toFixed(1)
     .padStart(4, "0")}`;
+}
+
+function formatTrimAmount(amount: number) {
+  return amount > 0 ? `+${amount}` : `${amount}`;
 }
 
 function isTypingTarget(target: EventTarget | null) {
@@ -192,22 +198,13 @@ export default function TagClipsPage() {
     useState<string>("");
 
   const [notes, setNotes] = useState("");
-
   const [showNotes, setShowNotes] = useState(false);
-  const [showClipTools, setShowClipTools] = useState(false);
 
   const [editingEventId, setEditingEventId] =
     useState<string | null>(null);
 
   const [savingEvent, setSavingEvent] = useState(false);
-
-  const [clipStartDraft, setClipStartDraft] =
-    useState<number | null>(null);
-
-  const [clipEndDraft, setClipEndDraft] =
-    useState<number | null>(null);
-
-  const [savingClip, setSavingClip] = useState(false);
+  const [savingTrim, setSavingTrim] = useState(false);
 
   const noticeTimerRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -256,6 +253,8 @@ export default function TagClipsPage() {
   const clipEnd = currentClip
     ? numberValue(currentClip.end_seconds)
     : 0;
+
+  const clipDuration = Math.max(0, clipEnd - clipStart);
 
   function showNoticeMessage(message: string) {
     setNotice(message);
@@ -320,7 +319,9 @@ export default function TagClipsPage() {
       const json = await response.json();
 
       if (!response.ok || !json.ok) {
-        throw new Error(json?.error || "Failed to load game.");
+        throw new Error(
+          json?.error || "Failed to load game."
+        );
       }
 
       const loadedGame = json.data as GameRow;
@@ -418,7 +419,8 @@ export default function TagClipsPage() {
       setCurrentClipIndex(0);
     } catch (e: any) {
       setError(
-        e?.message || "Failed to load tagging workspace."
+        e?.message ||
+          "Failed to load tagging workspace."
       );
     } finally {
       setLoading(false);
@@ -482,7 +484,6 @@ export default function TagClipsPage() {
 
     setCurrentClipIndex(index);
     resetTagger();
-    setShowClipTools(false);
   }
 
   function previousClip() {
@@ -496,6 +497,107 @@ export default function TagClipsPage() {
         currentClipIndex + 1
       )
     );
+  }
+
+  async function adjustClipBoundary(
+    boundary: "start" | "end",
+    amount: number
+  ) {
+    if (!currentClip || savingTrim) return;
+
+    const oldStart = clipStart;
+    const oldEnd = clipEnd;
+
+    let newStart = oldStart;
+    let newEnd = oldEnd;
+
+    if (boundary === "start") {
+      newStart = Math.max(
+        0,
+        Number((oldStart + amount).toFixed(3))
+      );
+    } else {
+      newEnd = Math.max(
+        0,
+        Number((oldEnd + amount).toFixed(3))
+      );
+    }
+
+    /*
+      Always leave at least 0.5 seconds between
+      the beginning and end of the clip.
+    */
+    if (newEnd - newStart < 0.5) {
+      setError(
+        "The clip must be at least 0.5 seconds long."
+      );
+      return;
+    }
+
+    setSavingTrim(true);
+    setError(null);
+
+    try {
+      const supabase = supabaseBrowser();
+
+      const { data, error: updateError } =
+        await supabase
+          .from("clips")
+          .update({
+            start_seconds: newStart,
+            end_seconds: newEnd,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", currentClip.id)
+          .select(
+            "id,game_id,created_by,video_path,start_seconds,end_seconds"
+          )
+          .single();
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      const updatedClip = data as ClipRow;
+
+      setClips((existing) =>
+        existing.map((clip) =>
+          clip.id === currentClip.id
+            ? updatedClip
+            : clip
+        )
+      );
+
+      /*
+        Immediately restart the video using the new
+        boundaries so the coach can judge the trim
+        without pressing Save or scrolling away.
+      */
+      const video = videoRef.current;
+
+      if (video) {
+        const updatedStart = numberValue(
+          updatedClip.start_seconds
+        );
+
+        video.currentTime = updatedStart;
+        setCurrentTime(updatedStart);
+
+        video.play().catch(() => {});
+      }
+
+      showNoticeMessage(
+        boundary === "start"
+          ? "Clip start updated"
+          : "Clip end updated"
+      );
+    } catch (e: any) {
+      setError(
+        e?.message || "Failed to adjust clip."
+      );
+    } finally {
+      setSavingTrim(false);
+    }
   }
 
   async function saveEvent() {
@@ -512,7 +614,9 @@ export default function TagClipsPage() {
     }
 
     if (!selectedOutcome) {
-      setError("Choose Successful or Unsuccessful.");
+      setError(
+        "Choose Successful or Unsuccessful."
+      );
       return;
     }
 
@@ -545,7 +649,9 @@ export default function TagClipsPage() {
             : selectedPlayerId,
         created_by: userId,
         action: selectedAction,
-        event_seconds: Number(eventSeconds.toFixed(3)),
+        event_seconds: Number(
+          eventSeconds.toFixed(3)
+        ),
         outcome: selectedOutcome,
         field_zone: selectedZone,
         area: null,
@@ -595,16 +701,13 @@ export default function TagClipsPage() {
         showNoticeMessage("Event added");
       }
 
-      /*
-        Keep the player selected after saving.
-        This makes repeated touches/actions by the
-        same player much faster to enter.
-      */
       resetTagger({
         keepPlayer: true,
       });
     } catch (e: any) {
-      setError(e?.message || "Failed to save event.");
+      setError(
+        e?.message || "Failed to save event."
+      );
     } finally {
       setSavingEvent(false);
     }
@@ -613,7 +716,9 @@ export default function TagClipsPage() {
   function editEvent(event: ClipEventRow) {
     setEditingEventId(event.id);
 
-    setSelectedPlayerId(event.player_id ?? "team");
+    setSelectedPlayerId(
+      event.player_id ?? "team"
+    );
     setSelectedAction(event.action);
     setSelectedOutcome(event.outcome ?? "");
     setSelectedZone(event.field_zone ?? "");
@@ -623,7 +728,9 @@ export default function TagClipsPage() {
     const video = videoRef.current;
 
     if (video) {
-      const time = numberValue(event.event_seconds);
+      const time = numberValue(
+        event.event_seconds
+      );
 
       video.currentTime = time;
       setCurrentTime(time);
@@ -634,7 +741,9 @@ export default function TagClipsPage() {
   function duplicateEvent(event: ClipEventRow) {
     setEditingEventId(null);
 
-    setSelectedPlayerId(event.player_id ?? "team");
+    setSelectedPlayerId(
+      event.player_id ?? "team"
+    );
     setSelectedAction(event.action);
     setSelectedOutcome(event.outcome ?? "");
     setSelectedZone(event.field_zone ?? "");
@@ -644,35 +753,46 @@ export default function TagClipsPage() {
     const video = videoRef.current;
 
     if (video) {
-      const time = numberValue(event.event_seconds);
+      const time = numberValue(
+        event.event_seconds
+      );
 
       video.currentTime = time;
       setCurrentTime(time);
       video.pause();
     }
 
-    showNoticeMessage("Event copied — change anything, then Add");
+    showNoticeMessage(
+      "Event copied — change anything, then Add"
+    );
   }
 
   async function deleteEvent(eventId: string) {
-    const ok = window.confirm("Delete this event?");
+    const ok = window.confirm(
+      "Delete this event?"
+    );
 
     if (!ok) return;
 
     try {
       const supabase = supabaseBrowser();
 
-      const { error: deleteError } = await supabase
-        .from("clip_events")
-        .delete()
-        .eq("id", eventId);
+      const { error: deleteError } =
+        await supabase
+          .from("clip_events")
+          .delete()
+          .eq("id", eventId);
 
       if (deleteError) {
-        throw new Error(deleteError.message);
+        throw new Error(
+          deleteError.message
+        );
       }
 
       setEvents((existing) =>
-        existing.filter((event) => event.id !== eventId)
+        existing.filter(
+          (event) => event.id !== eventId
+        )
       );
 
       if (editingEventId === eventId) {
@@ -681,11 +801,15 @@ export default function TagClipsPage() {
 
       showNoticeMessage("Event deleted");
     } catch (e: any) {
-      setError(e?.message || "Failed to delete event.");
+      setError(
+        e?.message || "Failed to delete event."
+      );
     }
   }
 
-  function playerLabel(playerId: string | null) {
+  function playerLabel(
+    playerId: string | null
+  ) {
     if (!playerId) return "TEAM";
 
     const player = players.find(
@@ -707,74 +831,10 @@ export default function TagClipsPage() {
     if (!zone) return "No location";
 
     return (
-      FIELD_ZONES.find((item) => item.id === zone)?.label ??
-      zone
+      FIELD_ZONES.find(
+        (item) => item.id === zone
+      )?.label ?? zone
     );
-  }
-
-  function startClipEdit() {
-    if (!currentClip) return;
-
-    setClipStartDraft(clipStart);
-    setClipEndDraft(clipEnd);
-    setShowClipTools(true);
-  }
-
-  async function saveClipLength() {
-    if (
-      !currentClip ||
-      clipStartDraft === null ||
-      clipEndDraft === null
-    ) {
-      return;
-    }
-
-    if (clipStartDraft < 0 || clipEndDraft <= clipStartDraft) {
-      setError("Clip end must be after clip start.");
-      return;
-    }
-
-    setSavingClip(true);
-    setError(null);
-
-    try {
-      const supabase = supabaseBrowser();
-
-      const { data, error: updateError } =
-        await supabase
-          .from("clips")
-          .update({
-            start_seconds: Number(
-              clipStartDraft.toFixed(3)
-            ),
-            end_seconds: Number(
-              clipEndDraft.toFixed(3)
-            ),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", currentClip.id)
-          .select("*")
-          .single();
-
-      if (updateError) {
-        throw new Error(updateError.message);
-      }
-
-      setClips((existing) =>
-        existing.map((clip) =>
-          clip.id === currentClip.id
-            ? (data as ClipRow)
-            : clip
-        )
-      );
-
-      setShowClipTools(false);
-      showNoticeMessage("Clip length updated");
-    } catch (e: any) {
-      setError(e?.message || "Failed to update clip.");
-    } finally {
-      setSavingClip(false);
-    }
   }
 
   async function deleteCurrentClip() {
@@ -789,13 +849,16 @@ export default function TagClipsPage() {
     try {
       const supabase = supabaseBrowser();
 
-      const { error: deleteError } = await supabase
-        .from("clips")
-        .delete()
-        .eq("id", currentClip.id);
+      const { error: deleteError } =
+        await supabase
+          .from("clips")
+          .delete()
+          .eq("id", currentClip.id);
 
       if (deleteError) {
-        throw new Error(deleteError.message);
+        throw new Error(
+          deleteError.message
+        );
       }
 
       const deletedId = currentClip.id;
@@ -808,23 +871,28 @@ export default function TagClipsPage() {
 
       setEvents((existing) =>
         existing.filter(
-          (event) => event.clip_id !== deletedId
+          (event) =>
+            event.clip_id !== deletedId
         )
       );
 
       setCurrentClipIndex((index) =>
         Math.max(
           0,
-          Math.min(index, remaining.length - 1)
+          Math.min(
+            index,
+            remaining.length - 1
+          )
         )
       );
 
-      setShowClipTools(false);
       resetTagger();
 
       showNoticeMessage("Clip deleted");
     } catch (e: any) {
-      setError(e?.message || "Failed to delete clip.");
+      setError(
+        e?.message || "Failed to delete clip."
+      );
     }
   }
 
@@ -833,7 +901,9 @@ export default function TagClipsPage() {
 
     return () => {
       if (noticeTimerRef.current) {
-        clearTimeout(noticeTimerRef.current);
+        clearTimeout(
+          noticeTimerRef.current
+        );
       }
     };
   }, []);
@@ -847,32 +917,41 @@ export default function TagClipsPage() {
   }, [mounted, gameId]);
 
   useEffect(() => {
-    if (!currentClip || !currentVideo) return;
+    if (!currentClip || !currentVideo) {
+      return;
+    }
 
     const timer = window.setTimeout(() => {
       const video = videoRef.current;
 
       if (!video) return;
 
-      video.currentTime = numberValue(
+      const start = numberValue(
         currentClip.start_seconds
       );
 
-      setCurrentTime(
-        numberValue(currentClip.start_seconds)
-      );
+      video.currentTime = start;
+      setCurrentTime(start);
 
       video.play().catch(() => {});
     }, 120);
 
-    return () => window.clearTimeout(timer);
-  }, [currentClip?.id, currentVideo?.signedUrl]);
+    return () =>
+      window.clearTimeout(timer);
+  }, [
+    currentClip?.id,
+    currentVideo?.signedUrl,
+  ]);
 
   useEffect(() => {
     if (!mounted) return;
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) return;
+    function handleKeyDown(
+      event: KeyboardEvent
+    ) {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
 
       if (
         event.code === "ShiftLeft" ||
@@ -886,10 +965,16 @@ export default function TagClipsPage() {
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
     };
   }, [mounted]);
 
@@ -898,8 +983,13 @@ export default function TagClipsPage() {
   if (loading) {
     return (
       <div className="space-y-3">
-        <h1 className="text-3xl font-bold">Tag Clips</h1>
-        <p className="muted">Loading tagging workspace…</p>
+        <h1 className="text-3xl font-bold">
+          Tag Clips
+        </h1>
+
+        <p className="muted">
+          Loading tagging workspace…
+        </p>
       </div>
     );
   }
@@ -930,7 +1020,9 @@ export default function TagClipsPage() {
   if (sortedClips.length === 0) {
     return (
       <div className="space-y-5">
-        <h1 className="text-3xl font-bold">Tag Clips</h1>
+        <h1 className="text-3xl font-bold">
+          Tag Clips
+        </h1>
 
         <div className="card text-center py-10">
           <div className="font-semibold text-xl">
@@ -938,13 +1030,16 @@ export default function TagClipsPage() {
           </div>
 
           <p className="text-sm text-zinc-400 mt-2">
-            Create clips first, then tag the events inside them.
+            Create clips first, then tag the
+            events inside them.
           </p>
 
           <button
             className="btn-primary mt-5"
             onClick={() =>
-              router.push(`/games/${gameId}/tag`)
+              router.push(
+                `/games/${gameId}/tag`
+              )
             }
           >
             Go to Clip Events
@@ -957,7 +1052,7 @@ export default function TagClipsPage() {
   return (
     <div className="space-y-4 pb-8">
       {notice ? (
-        <div className="fixed bottom-5 right-5 z-50 bg-yellow-400 text-black font-bold rounded-xl px-4 py-3 shadow-2xl">
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-yellow-400 px-4 py-3 font-bold text-black shadow-2xl">
           ✓ {notice}
         </div>
       ) : null}
@@ -965,7 +1060,7 @@ export default function TagClipsPage() {
       {/* HEADER */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-[0.18em] text-yellow-400 font-semibold">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
             Step 2 of 2
           </div>
 
@@ -973,15 +1068,18 @@ export default function TagClipsPage() {
             Tag Clips
           </h1>
 
-          <div className="text-xs text-zinc-400 mt-1">
-            {game.date} • vs {game.opponent ?? "Opponent"}
+          <div className="mt-1 text-xs text-zinc-400">
+            {game.date} • vs{" "}
+            {game.opponent ?? "Opponent"}
           </div>
         </div>
 
         <button
           className="btn-ghost"
           onClick={() =>
-            router.push(`/games/${gameId}/tag`)
+            router.push(
+              `/games/${gameId}/tag`
+            )
           }
         >
           ← Clipping
@@ -1013,7 +1111,10 @@ export default function TagClipsPage() {
 
             <div className="text-xs text-zinc-400">
               {formatTime(clipStart)} –{" "}
-              {formatTime(clipEnd)} •{" "}
+              {formatTime(clipEnd)}
+              {" • "}
+              {clipDuration.toFixed(1)}s
+              {" • "}
               {currentClipEvents.length} events
             </div>
           </div>
@@ -1021,7 +1122,8 @@ export default function TagClipsPage() {
           <button
             className="btn-primary"
             disabled={
-              currentClipIndex === sortedClips.length - 1
+              currentClipIndex ===
+              sortedClips.length - 1
             }
             onClick={nextClip}
           >
@@ -1030,8 +1132,8 @@ export default function TagClipsPage() {
         </div>
       </div>
 
-      {/* BIG VIDEO */}
-      <div className="card p-2 md:p-3">
+      {/* VIDEO + LIVE TRIM */}
+      <div className="card space-y-3 p-2 md:p-3">
         {currentVideo ? (
           <video
             key={currentVideo.signedUrl}
@@ -1040,13 +1142,16 @@ export default function TagClipsPage() {
             controls
             playsInline
             preload="metadata"
-            className="w-full max-h-[68vh] bg-black rounded-xl"
+            className="w-full max-h-[68vh] rounded-xl bg-black"
             onLoadedMetadata={() => {
-              const video = videoRef.current;
+              const video =
+                videoRef.current;
 
               if (!video) return;
 
-              video.currentTime = clipStart;
+              video.currentTime =
+                clipStart;
+
               setCurrentTime(clipStart);
 
               video.play().catch(() => {});
@@ -1054,13 +1159,157 @@ export default function TagClipsPage() {
             onTimeUpdate={handleTimeUpdate}
           />
         ) : (
-          <div className="aspect-video bg-black rounded-xl flex items-center justify-center text-zinc-400">
+          <div className="flex aspect-video items-center justify-center rounded-xl bg-black text-zinc-400">
             Video unavailable
           </div>
         )}
+
+        {/* LIVE CLIP TRIMMER */}
+        <div className="rounded-xl border border-zinc-800 bg-black/25 p-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-yellow-400">
+                Live Clip Trim
+              </div>
+
+              <div className="mt-1 text-sm">
+                <span className="font-mono font-bold">
+                  {formatTime(clipStart)}
+                </span>
+                {" → "}
+                <span className="font-mono font-bold">
+                  {formatTime(clipEnd)}
+                </span>
+
+                <span className="ml-2 text-zinc-500">
+                  ({clipDuration.toFixed(1)}s)
+                </span>
+              </div>
+            </div>
+
+            <div className="text-xs text-zinc-500">
+              {savingTrim
+                ? "Saving adjustment…"
+                : "Every adjustment saves automatically"}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {/* START */}
+            <div className="rounded-xl border border-zinc-800 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Clip Start
+                  </div>
+
+                  <div className="font-mono text-lg font-bold text-yellow-300">
+                    {formatTime(clipStart)}
+                  </div>
+                </div>
+
+                <div className="text-xs text-zinc-500">
+                  Beginning
+                </div>
+              </div>
+
+              <div className="grid grid-cols-6 gap-1.5">
+                {TRIM_AMOUNTS.map(
+                  (amount) => (
+                    <button
+                      key={`start-${amount}`}
+                      type="button"
+                      disabled={savingTrim}
+                      className="btn-ghost px-1 py-2 text-xs"
+                      onClick={() =>
+                        adjustClipBoundary(
+                          "start",
+                          amount
+                        )
+                      }
+                    >
+                      {formatTrimAmount(
+                        amount
+                      )}
+                    </button>
+                  )
+                )}
+              </div>
+
+              <div className="mt-2 text-[11px] leading-5 text-zinc-500">
+                Negative adds time before the
+                clip. Positive trims the
+                beginning.
+              </div>
+            </div>
+
+            {/* END */}
+            <div className="rounded-xl border border-zinc-800 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Clip End
+                  </div>
+
+                  <div className="font-mono text-lg font-bold text-yellow-300">
+                    {formatTime(clipEnd)}
+                  </div>
+                </div>
+
+                <div className="text-xs text-zinc-500">
+                  Ending
+                </div>
+              </div>
+
+              <div className="grid grid-cols-6 gap-1.5">
+                {TRIM_AMOUNTS.map(
+                  (amount) => (
+                    <button
+                      key={`end-${amount}`}
+                      type="button"
+                      disabled={savingTrim}
+                      className="btn-ghost px-1 py-2 text-xs"
+                      onClick={() =>
+                        adjustClipBoundary(
+                          "end",
+                          amount
+                        )
+                      }
+                    >
+                      {formatTrimAmount(
+                        amount
+                      )}
+                    </button>
+                  )
+                )}
+              </div>
+
+              <div className="mt-2 text-[11px] leading-5 text-zinc-500">
+                Negative trims the ending.
+                Positive adds more time after
+                the clip.
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 pt-3">
+            <div className="text-xs text-zinc-500">
+              Watch the loop, tap a trim
+              button, and the updated clip
+              restarts automatically.
+            </div>
+
+            <button
+              className="btn-danger"
+              onClick={deleteCurrentClip}
+            >
+              Delete Clip
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* COMPACT PLAYBACK BAR */}
+      {/* PLAYBACK BAR */}
       <div className="card py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1076,7 +1325,9 @@ export default function TagClipsPage() {
           <div className="flex flex-wrap gap-2">
             <button
               className="btn-ghost"
-              onClick={() => movePlayhead(-0.5)}
+              onClick={() =>
+                movePlayhead(-0.5)
+              }
             >
               −0.5
             </button>
@@ -1090,7 +1341,9 @@ export default function TagClipsPage() {
 
             <button
               className="btn-ghost"
-              onClick={() => movePlayhead(0.5)}
+              onClick={() =>
+                movePlayhead(0.5)
+              }
             >
               +0.5
             </button>
@@ -1110,31 +1363,36 @@ export default function TagClipsPage() {
       </div>
 
       {/* TAGGING CONSOLE */}
-      <div className="card border-yellow-500/30 space-y-4">
+      <div className="card space-y-4 border-yellow-500/30">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-xs text-yellow-400 font-semibold uppercase tracking-wider">
-              {editingEventId ? "Edit Event" : "New Event"}
+            <div className="text-xs font-semibold uppercase tracking-wider text-yellow-400">
+              {editingEventId
+                ? "Edit Event"
+                : "New Event"}
             </div>
 
             <div className="font-semibold">
-              Player → Action → Outcome → Location
+              Player → Action → Outcome →
+              Location
             </div>
           </div>
 
           {editingEventId ? (
             <button
               className="btn-ghost"
-              onClick={() => resetTagger()}
+              onClick={() =>
+                resetTagger()
+              }
             >
               Cancel Edit
             </button>
           ) : null}
         </div>
 
-        {/* PLAYER QUICK SELECT */}
+        {/* PLAYER */}
         <div>
-          <div className="text-xs text-zinc-500 mb-2">
+          <div className="mb-2 text-xs text-zinc-500">
             1. PLAYER
           </div>
 
@@ -1146,7 +1404,9 @@ export default function TagClipsPage() {
                   ? "btn-primary whitespace-nowrap"
                   : "btn-ghost whitespace-nowrap"
               }
-              onClick={() => setSelectedPlayerId("team")}
+              onClick={() =>
+                setSelectedPlayerId("team")
+              }
             >
               TEAM
             </button>
@@ -1156,16 +1416,21 @@ export default function TagClipsPage() {
                 key={player.id}
                 type="button"
                 className={
-                  selectedPlayerId === player.id
+                  selectedPlayerId ===
+                  player.id
                     ? "btn-primary whitespace-nowrap"
                     : "btn-ghost whitespace-nowrap"
                 }
                 onClick={() =>
-                  setSelectedPlayerId(player.id)
+                  setSelectedPlayerId(
+                    player.id
+                  )
                 }
               >
-                {player.jersey_number !== null &&
-                player.jersey_number !== undefined
+                {player.jersey_number !==
+                  null &&
+                player.jersey_number !==
+                  undefined
                   ? `#${player.jersey_number} `
                   : ""}
                 {player.name}
@@ -1175,9 +1440,9 @@ export default function TagClipsPage() {
         </div>
 
         {/* ACTION + OUTCOME */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_230px] gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_230px]">
           <div>
-            <div className="text-xs text-zinc-500 mb-2">
+            <div className="mb-2 text-xs text-zinc-500">
               2. ACTION
             </div>
 
@@ -1187,12 +1452,15 @@ export default function TagClipsPage() {
                   key={action}
                   type="button"
                   className={
-                    selectedAction === action
+                    selectedAction ===
+                    action
                       ? "btn-primary"
                       : "btn-ghost"
                   }
                   onClick={() =>
-                    setSelectedAction(action)
+                    setSelectedAction(
+                      action
+                    )
                   }
                 >
                   {action}
@@ -1202,20 +1470,23 @@ export default function TagClipsPage() {
           </div>
 
           <div>
-            <div className="text-xs text-zinc-500 mb-2">
+            <div className="mb-2 text-xs text-zinc-500">
               3. OUTCOME
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
               <button
                 type="button"
                 className={
-                  selectedOutcome === "successful"
+                  selectedOutcome ===
+                  "successful"
                     ? "btn-primary"
                     : "btn-ghost"
                 }
                 onClick={() =>
-                  setSelectedOutcome("successful")
+                  setSelectedOutcome(
+                    "successful"
+                  )
                 }
               >
                 ✓ Successful
@@ -1224,12 +1495,15 @@ export default function TagClipsPage() {
               <button
                 type="button"
                 className={
-                  selectedOutcome === "unsuccessful"
+                  selectedOutcome ===
+                  "unsuccessful"
                     ? "btn-primary"
                     : "btn-ghost"
                 }
                 onClick={() =>
-                  setSelectedOutcome("unsuccessful")
+                  setSelectedOutcome(
+                    "unsuccessful"
+                  )
                 }
               >
                 ✕ Unsuccessful
@@ -1238,84 +1512,116 @@ export default function TagClipsPage() {
           </div>
         </div>
 
-        {/* PITCH + SAVE */}
-        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 items-start">
+        {/* PORTRAIT PITCH + SAVE */}
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[300px_1fr]">
           <div>
-            <div className="text-xs text-zinc-500 mb-2">
+            <div className="mb-2 text-xs text-zinc-500">
               4. EVENT LOCATION
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="text-[10px] text-zinc-400 [writing-mode:vertical-rl] rotate-180">
-                ATTACKING
-              </div>
-
-              <div className="relative flex-1">
-                <div className="absolute inset-0 pointer-events-none rounded-lg border-2 border-white/50">
-                  <div className="absolute left-1/2 top-0 bottom-0 border-l border-white/30" />
-
-                  <div className="absolute left-1/2 top-1/2 w-14 h-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/30" />
+            <div className="mx-auto w-full max-w-[280px]">
+              <div className="mb-2 text-center">
+                <div className="text-xs font-bold tracking-[0.18em] text-yellow-400">
+                  ↑ ATTACKING ↑
                 </div>
 
-                <div className="grid grid-cols-3 grid-rows-3 aspect-[1.45/1] bg-emerald-900/30 rounded-lg overflow-hidden border border-white/30">
-                  {FIELD_ZONES.map((zone) => (
-                    <button
-                      key={zone.id}
-                      type="button"
-                      title={zone.label}
-                      className={`relative z-10 border border-white/20 text-xs font-bold transition ${
-                        selectedZone === zone.id
-                          ? "bg-yellow-400 text-black"
-                          : "bg-transparent text-white hover:bg-white/10"
-                      }`}
-                      onClick={() =>
-                        setSelectedZone(zone.id)
-                      }
-                    >
-                      {zone.short}
-                    </button>
-                  ))}
+                <div className="mt-1 text-[10px] text-zinc-500">
+                  Left / Center / Right are
+                  from your team&apos;s
+                  attacking perspective
                 </div>
               </div>
 
-              <div className="text-[10px] text-zinc-400 [writing-mode:vertical-rl]">
-                DEFENDING
-              </div>
-            </div>
+              {/* UPRIGHT FIELD */}
+              <div className="relative mx-auto aspect-[0.68/1] w-full overflow-hidden rounded-xl border-2 border-white/50 bg-emerald-900/30">
+                {/* Halfway line */}
+                <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-20 border-t border-white/35" />
 
-            <div className="text-center text-xs mt-2">
-              {selectedZone
-                ? zoneLabel(selectedZone)
-                : "Click a section of the field"}
+                {/* Center circle */}
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/35" />
+
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40" />
+
+                {/* Top penalty area */}
+                <div className="pointer-events-none absolute left-1/2 top-0 z-20 h-[14%] w-[55%] -translate-x-1/2 border border-t-0 border-white/30" />
+
+                {/* Bottom penalty area */}
+                <div className="pointer-events-none absolute bottom-0 left-1/2 z-20 h-[14%] w-[55%] -translate-x-1/2 border border-b-0 border-white/30" />
+
+                {/* 3 x 3 event grid */}
+                <div className="absolute inset-0 z-10 grid grid-cols-3 grid-rows-3">
+                  {FIELD_ZONES.map(
+                    (zone) => (
+                      <button
+                        key={zone.id}
+                        type="button"
+                        title={zone.label}
+                        className={`border border-white/20 text-xs font-black transition ${
+                          selectedZone ===
+                          zone.id
+                            ? "bg-yellow-400 text-black"
+                            : "bg-transparent text-white hover:bg-white/10"
+                        }`}
+                        onClick={() =>
+                          setSelectedZone(
+                            zone.id
+                          )
+                        }
+                      >
+                        {zone.short}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-2 text-center text-xs font-bold tracking-[0.18em] text-zinc-400">
+                ↓ DEFENDING ↓
+              </div>
+
+              <div className="mt-2 text-center text-xs">
+                {selectedZone
+                  ? zoneLabel(
+                      selectedZone
+                    )
+                  : "Click one of the 9 field zones"}
+              </div>
             </div>
           </div>
 
-          {/* SAVE PANEL */}
+          {/* SAVE EVENT */}
           <div className="space-y-3">
             <div className="rounded-xl border border-zinc-800 bg-black/20 p-3 text-sm">
-              <div className="text-xs text-zinc-500 mb-1">
+              <div className="mb-1 text-xs text-zinc-500">
                 EVENT
               </div>
 
               <div className="font-semibold">
                 {selectedPlayerId
-                  ? selectedPlayerId === "team"
+                  ? selectedPlayerId ===
+                    "team"
                     ? "TEAM"
-                    : playerLabel(selectedPlayerId)
+                    : playerLabel(
+                        selectedPlayerId
+                      )
                   : "Choose player"}
                 {" • "}
-                {selectedAction || "Choose action"}
+                {selectedAction ||
+                  "Choose action"}
               </div>
 
-              <div className="text-xs text-zinc-400 mt-1">
+              <div className="mt-1 text-xs text-zinc-400">
                 {selectedOutcome
-                  ? selectedOutcome === "successful"
+                  ? selectedOutcome ===
+                    "successful"
                     ? "Successful"
                     : "Unsuccessful"
                   : "Choose outcome"}
                 {" • "}
                 {selectedZone
-                  ? zoneLabel(selectedZone)
+                  ? zoneLabel(
+                      selectedZone
+                    )
                   : "Choose location"}
                 {" • "}
                 {formatTime(currentTime)}
@@ -1334,19 +1640,41 @@ export default function TagClipsPage() {
                 : "Add Event"}
             </button>
 
+            <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
+              <div className="text-xs font-semibold text-zinc-300">
+                Multiple events are allowed
+              </div>
+
+              <div className="mt-1 text-xs leading-5 text-zinc-500">
+                Every time you press Add
+                Event, that event is saved
+                immediately. Keep tagging
+                this same clip as many times
+                as needed.
+              </div>
+            </div>
+
             <button
               className="btn-ghost w-full"
-              onClick={() => setShowNotes((value) => !value)}
+              onClick={() =>
+                setShowNotes(
+                  (value) => !value
+                )
+              }
             >
-              {showNotes ? "Hide Notes" : "+ Optional Note"}
+              {showNotes
+                ? "Hide Notes"
+                : "+ Optional Note"}
             </button>
 
             {showNotes ? (
               <textarea
-                className="input w-full min-h-20"
+                className="input min-h-20 w-full"
                 value={notes}
                 onChange={(event) =>
-                  setNotes(event.target.value)
+                  setNotes(
+                    event.target.value
+                  )
                 }
                 placeholder="Optional coaching note…"
               />
@@ -1355,264 +1683,191 @@ export default function TagClipsPage() {
         </div>
       </div>
 
-      {/* COMPACT EVENT TRAY */}
+      {/* EVENT TRAY */}
       <div className="card space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="font-semibold">
-              Events in Clip
+              Saved Events in This Clip
             </div>
 
             <div className="text-xs text-zinc-500">
-              Add as many events as happen inside this clip.
+              These events are already saved
+              to InsightFC.
             </div>
           </div>
 
-          <div className="font-bold">
+          <div className="rounded-lg bg-yellow-400 px-3 py-1 text-sm font-black text-black">
             {currentClipEvents.length}
           </div>
         </div>
 
         {currentClipEvents.length === 0 ? (
-          <div className="text-sm text-zinc-500 border border-dashed border-zinc-700 rounded-xl p-4 text-center">
-            No events tagged in this clip yet.
+          <div className="rounded-xl border border-dashed border-zinc-700 p-4 text-center text-sm text-zinc-500">
+            No events tagged in this clip
+            yet.
           </div>
         ) : (
           <div className="space-y-2">
-            {currentClipEvents.map((event) => (
-              <div
-                key={event.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-black/25 px-3 py-2"
-              >
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <span className="font-mono text-yellow-300">
-                    {formatTime(
-                      numberValue(event.event_seconds)
-                    )}
-                  </span>
+            {currentClipEvents.map(
+              (event) => (
+                <div
+                  key={event.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-black/25 px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="font-mono text-yellow-300">
+                      {formatTime(
+                        numberValue(
+                          event.event_seconds
+                        )
+                      )}
+                    </span>
 
-                  <span className="font-semibold">
-                    {playerLabel(event.player_id)}
-                  </span>
+                    <span className="font-semibold">
+                      {playerLabel(
+                        event.player_id
+                      )}
+                    </span>
 
-                  <span>{event.action}</span>
+                    <span>
+                      {event.action}
+                    </span>
 
-                  <span
-                    className={
-                      event.outcome === "successful"
-                        ? "text-green-400"
-                        : "text-red-400"
-                    }
-                  >
-                    {event.outcome === "successful"
-                      ? "✓"
-                      : "✕"}
-                  </span>
+                    <span
+                      className={
+                        event.outcome ===
+                        "successful"
+                          ? "text-green-400"
+                          : "text-red-400"
+                      }
+                    >
+                      {event.outcome ===
+                      "successful"
+                        ? "✓"
+                        : event.outcome ===
+                          "unsuccessful"
+                        ? "✕"
+                        : "—"}
+                    </span>
 
-                  <span className="text-zinc-400">
-                    {zoneLabel(event.field_zone)}
-                  </span>
+                    <span className="text-zinc-400">
+                      {zoneLabel(
+                        event.field_zone
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="btn-ghost"
+                      onClick={() => {
+                        const video =
+                          videoRef.current;
+
+                        if (!video) return;
+
+                        const time =
+                          numberValue(
+                            event.event_seconds
+                          );
+
+                        video.currentTime =
+                          time;
+
+                        setCurrentTime(
+                          time
+                        );
+
+                        video
+                          .play()
+                          .catch(() => {});
+                      }}
+                    >
+                      Watch
+                    </button>
+
+                    <button
+                      className="btn-ghost"
+                      onClick={() =>
+                        duplicateEvent(
+                          event
+                        )
+                      }
+                    >
+                      Duplicate
+                    </button>
+
+                    <button
+                      className="btn-ghost"
+                      onClick={() =>
+                        editEvent(event)
+                      }
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="btn-danger"
+                      onClick={() =>
+                        deleteEvent(
+                          event.id
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-
-                <div className="flex gap-2">
-                  <button
-                    className="btn-ghost"
-                    onClick={() => {
-                      const video = videoRef.current;
-
-                      if (!video) return;
-
-                      const time = numberValue(
-                        event.event_seconds
-                      );
-
-                      video.currentTime = time;
-                      setCurrentTime(time);
-                      video.play().catch(() => {});
-                    }}
-                  >
-                    Watch
-                  </button>
-
-                  <button
-                    className="btn-ghost"
-                    onClick={() => duplicateEvent(event)}
-                  >
-                    Duplicate
-                  </button>
-
-                  <button
-                    className="btn-ghost"
-                    onClick={() => editEvent(event)}
-                  >
-                    Edit
-                  </button>
-
-                  <button
-                    className="btn-danger"
-                    onClick={() => deleteEvent(event.id)}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         )}
       </div>
 
-      {/* SMALL CLIP TOOLS */}
-      <div className="card py-3">
+      {/* BOTTOM NAV */}
+      <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm">
-            <span className="font-semibold">Clip:</span>{" "}
-            {formatTime(clipStart)} → {formatTime(clipEnd)}
-            {" • "}
-            {(clipEnd - clipStart).toFixed(1)}s
+          <div>
+            <div className="font-semibold">
+              Clip {currentClipIndex + 1} of{" "}
+              {sortedClips.length}
+            </div>
+
+            <div className="text-xs text-zinc-500">
+              {currentClipEvents.length}{" "}
+              saved event
+              {currentClipEvents.length ===
+              1
+                ? ""
+                : "s"}{" "}
+              in this clip
+            </div>
           </div>
 
-          <button
-            className="btn-ghost"
-            onClick={() => {
-              if (showClipTools) {
-                setShowClipTools(false);
-              } else {
-                startClipEdit();
+          <div className="flex gap-2">
+            <button
+              className="btn-ghost"
+              disabled={
+                currentClipIndex === 0
               }
-            }}
-          >
-            {showClipTools
-              ? "Close Clip Tools"
-              : "Edit / Delete Clip"}
-          </button>
-        </div>
+              onClick={previousClip}
+            >
+              ← Previous
+            </button>
 
-        {showClipTools ? (
-          <div className="mt-4 pt-4 border-t border-zinc-800 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">
-                  Start
-                </span>
-
-                <input
-                  className="input w-full"
-                  type="number"
-                  step={0.1}
-                  min={0}
-                  value={clipStartDraft ?? clipStart}
-                  onChange={(event) =>
-                    setClipStartDraft(
-                      Number(event.target.value)
-                    )
-                  }
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">
-                  End
-                </span>
-
-                <input
-                  className="input w-full"
-                  type="number"
-                  step={0.1}
-                  min={0}
-                  value={clipEndDraft ?? clipEnd}
-                  onChange={(event) =>
-                    setClipEndDraft(
-                      Number(event.target.value)
-                    )
-                  }
-                />
-              </label>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="btn-ghost"
-                onClick={() =>
-                  setClipStartDraft(
-                    Number(
-                      Math.max(
-                        0,
-                        (clipStartDraft ?? clipStart) - 0.5
-                      ).toFixed(1)
-                    )
-                  )
-                }
-              >
-                Start −0.5
-              </button>
-
-              <button
-                className="btn-ghost"
-                onClick={() =>
-                  setClipStartDraft(
-                    Number(
-                      (
-                        (clipStartDraft ?? clipStart) + 0.5
-                      ).toFixed(1)
-                    )
-                  )
-                }
-              >
-                Start +0.5
-              </button>
-
-              <button
-                className="btn-ghost"
-                onClick={() =>
-                  setClipEndDraft(
-                    Number(
-                      Math.max(
-                        0,
-                        (clipEndDraft ?? clipEnd) - 0.5
-                      ).toFixed(1)
-                    )
-                  )
-                }
-              >
-                End −0.5
-              </button>
-
-              <button
-                className="btn-ghost"
-                onClick={() =>
-                  setClipEndDraft(
-                    Number(
-                      (
-                        (clipEndDraft ?? clipEnd) + 0.5
-                      ).toFixed(1)
-                    )
-                  )
-                }
-              >
-                End +0.5
-              </button>
-            </div>
-
-            <div className="flex flex-wrap justify-between gap-3">
-              <button
-                className="btn-primary"
-                disabled={savingClip}
-                onClick={saveClipLength}
-              >
-                {savingClip
-                  ? "Saving…"
-                  : "Save Clip Length"}
-              </button>
-
-              <button
-                className="btn-danger"
-                onClick={deleteCurrentClip}
-              >
-                Delete Clip
-              </button>
-            </div>
+            <button
+              className="btn-primary"
+              disabled={
+                currentClipIndex ===
+                sortedClips.length - 1
+              }
+              onClick={nextClip}
+            >
+              Next Clip →
+            </button>
           </div>
-        ) : null}
+        </div>
       </div>
     </div>
   );
