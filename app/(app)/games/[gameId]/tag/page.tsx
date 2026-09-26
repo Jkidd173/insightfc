@@ -60,6 +60,21 @@ function clipNumber(value: number | string) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function isTypingTarget(target: EventTarget | null) {
+  if (!target) return false;
+
+  const element = target as HTMLElement;
+  const tag = element.tagName?.toLowerCase();
+
+  return (
+    tag === "input" ||
+    tag === "textarea" ||
+    tag === "select" ||
+    tag === "button" ||
+    element.isContentEditable
+  );
+}
+
 export default function GameTagPage() {
   const params = useParams<{ gameId: string }>();
   const router = useRouter();
@@ -116,18 +131,6 @@ export default function GameTagPage() {
           Math.min(selectedVideoIndex, videos.length - 1)
         ]
       : null;
-
-  const clipsForCurrentVideo = useMemo(() => {
-    if (!selectedVideo) return [];
-
-    return clips
-      .filter((clip) => clip.video_path === selectedVideo.path)
-      .sort(
-        (a, b) =>
-          clipNumber(a.start_seconds) -
-          clipNumber(b.start_seconds)
-      );
-  }, [clips, selectedVideo]);
 
   async function loadGame() {
     if (!gameId) return;
@@ -276,6 +279,16 @@ export default function GameTagPage() {
     }
   }
 
+  function stopLoop() {
+    setLoopClipId(null);
+  }
+
+  function cancelDraft() {
+    setDraftStart(null);
+    setDraftEnd(null);
+    setEditingClipId(null);
+  }
+
   function syncVideoTime() {
     const video = videoRef.current;
     if (!video) return;
@@ -307,12 +320,14 @@ export default function GameTagPage() {
 
     const video = videoRef.current;
     const center = video.currentTime || 0;
+
     const videoDuration =
       Number.isFinite(video.duration) && video.duration > 0
         ? video.duration
         : duration;
 
     const start = Math.max(0, center - 4);
+
     const end =
       videoDuration > 0
         ? Math.min(videoDuration, center + 4)
@@ -323,10 +338,16 @@ export default function GameTagPage() {
     setDraftEnd(Number(end.toFixed(1)));
   }
 
-  function cancelDraft() {
-    setDraftStart(null);
-    setDraftEnd(null);
-    setEditingClipId(null);
+  function toggleVideoPlayback() {
+    const video = videoRef.current;
+
+    if (!video || !selectedVideo) return;
+
+    if (video.paused || video.ended) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
   }
 
   async function saveDraft() {
@@ -486,10 +507,6 @@ export default function GameTagPage() {
     }, 100);
   }
 
-  function stopLoop() {
-    setLoopClipId(null);
-  }
-
   function jumpTo(seconds: number) {
     const video = videoRef.current;
     if (!video) return;
@@ -531,6 +548,62 @@ export default function GameTagPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, gameId]);
 
+  /*
+    KEYBOARD WORKFLOW
+
+    SPACE:
+    Create an 8-second clip draft centered on the playhead.
+
+    LEFT SHIFT / RIGHT SHIFT:
+    Play or pause the active match video.
+
+    Shortcuts are ignored while typing or editing controls.
+  */
+  useEffect(() => {
+    if (!mounted) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) return;
+
+      if (event.code === "Space") {
+        event.preventDefault();
+
+        if (event.repeat) return;
+
+        createDefaultDraft();
+        return;
+      }
+
+      if (
+        event.code === "ShiftLeft" ||
+        event.code === "ShiftRight"
+      ) {
+        event.preventDefault();
+
+        if (event.repeat) return;
+
+        toggleVideoPlayback();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mounted,
+    selectedVideo,
+    duration,
+    currentTime,
+    loopClipId,
+  ]);
+
   useEffect(() => {
     if (!loopClipId) return;
 
@@ -558,8 +631,13 @@ export default function GameTagPage() {
   if (loading) {
     return (
       <div className="space-y-3">
-        <h1 className="text-3xl font-bold">Clip Events</h1>
-        <p className="muted">Loading match…</p>
+        <h1 className="text-3xl font-bold">
+          Clip Events
+        </h1>
+
+        <p className="muted">
+          Loading match…
+        </p>
       </div>
     );
   }
@@ -603,6 +681,16 @@ export default function GameTagPage() {
           <p className="text-sm text-zinc-400 mt-2">
             Find the moments that matter. Tag the clips afterward.
           </p>
+
+          <div className="flex flex-wrap gap-2 mt-3 text-xs">
+            <span className="border border-zinc-700 rounded-lg px-3 py-1.5 text-zinc-300">
+              <b className="text-white">Space</b> — Create 8s Clip
+            </span>
+
+            <span className="border border-zinc-700 rounded-lg px-3 py-1.5 text-zinc-300">
+              <b className="text-white">Shift</b> — Play / Pause
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -691,7 +779,10 @@ export default function GameTagPage() {
               preload="metadata"
               className="w-full max-h-[72vh] bg-black rounded-xl"
               onLoadedMetadata={(event) => {
-                setDuration(event.currentTarget.duration || 0);
+                setDuration(
+                  event.currentTarget.duration || 0
+                );
+
                 setCurrentTime(
                   event.currentTarget.currentTime || 0
                 );
@@ -766,6 +857,18 @@ export default function GameTagPage() {
                   Create 8s Clip
                 </button>
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
+              <span>
+                Spacebar creates a clip at the playhead.
+              </span>
+
+              <span>•</span>
+
+              <span>
+                Either Shift key plays or pauses.
+              </span>
             </div>
 
             {videos.length > 1 ? (
@@ -880,9 +983,14 @@ export default function GameTagPage() {
               onClick={() => {
                 if (!videoRef.current) return;
 
-                videoRef.current.currentTime = draftStart;
+                videoRef.current.currentTime =
+                  draftStart;
+
                 setCurrentTime(draftStart);
-                videoRef.current.play().catch(() => {});
+
+                videoRef.current
+                  .play()
+                  .catch(() => {});
               }}
             >
               Preview From Start
@@ -893,7 +1001,10 @@ export default function GameTagPage() {
               onClick={() =>
                 setDraftStart(
                   Number(
-                    Math.max(0, draftStart - 0.5).toFixed(1)
+                    Math.max(
+                      0,
+                      draftStart - 0.5
+                    ).toFixed(1)
                   )
                 )
               }
@@ -905,7 +1016,9 @@ export default function GameTagPage() {
               className="btn-ghost"
               onClick={() =>
                 setDraftStart(
-                  Number((draftStart + 0.5).toFixed(1))
+                  Number(
+                    (draftStart + 0.5).toFixed(1)
+                  )
                 )
               }
             >
@@ -917,7 +1030,10 @@ export default function GameTagPage() {
               onClick={() =>
                 setDraftEnd(
                   Number(
-                    Math.max(0, draftEnd - 0.5).toFixed(1)
+                    Math.max(
+                      0,
+                      draftEnd - 0.5
+                    ).toFixed(1)
                   )
                 )
               }
@@ -929,7 +1045,9 @@ export default function GameTagPage() {
               className="btn-ghost"
               onClick={() =>
                 setDraftEnd(
-                  Number((draftEnd + 0.5).toFixed(1))
+                  Number(
+                    (draftEnd + 0.5).toFixed(1)
+                  )
                 )
               }
             >
@@ -976,8 +1094,8 @@ export default function GameTagPage() {
             </h2>
 
             <p className="text-sm text-zinc-400 mt-1">
-              Clips may overlap. You&apos;ll label players and
-              actions in Step 2.
+              Clips may overlap. One clip can contain multiple
+              player events and multiple tags.
             </p>
           </div>
 
@@ -987,7 +1105,9 @@ export default function GameTagPage() {
         </div>
 
         {clipsLoading ? (
-          <p className="muted">Loading clips…</p>
+          <p className="muted">
+            Loading clips…
+          </p>
         ) : clips.length === 0 ? (
           <div className="border border-dashed border-zinc-700 rounded-xl p-8 text-center">
             <div className="font-semibold">
@@ -996,17 +1116,25 @@ export default function GameTagPage() {
 
             <div className="text-sm text-zinc-400 mt-2">
               Play or scrub the match to an event, then press
-              Create 8s Clip.
+              Spacebar or click Create 8s Clip.
             </div>
           </div>
         ) : (
           <div className="space-y-3">
             {clips.map((clip, index) => {
-              const start = clipNumber(clip.start_seconds);
-              const end = clipNumber(clip.end_seconds);
-              const clipVideoIndex = videos.findIndex(
-                (video) => video.path === clip.video_path
+              const start = clipNumber(
+                clip.start_seconds
               );
+
+              const end = clipNumber(
+                clip.end_seconds
+              );
+
+              const clipVideoIndex =
+                videos.findIndex(
+                  (video) =>
+                    video.path === clip.video_path
+                );
 
               return (
                 <div
@@ -1052,7 +1180,9 @@ export default function GameTagPage() {
                       ) : (
                         <button
                           className="btn-ghost"
-                          onClick={() => watchClip(clip)}
+                          onClick={() =>
+                            watchClip(clip)
+                          }
                         >
                           Watch
                         </button>
@@ -1060,14 +1190,18 @@ export default function GameTagPage() {
 
                       <button
                         className="btn-ghost"
-                        onClick={() => editClip(clip)}
+                        onClick={() =>
+                          editClip(clip)
+                        }
                       >
                         Edit Length
                       </button>
 
                       <button
                         className="btn-danger"
-                        onClick={() => deleteClip(clip)}
+                        onClick={() =>
+                          deleteClip(clip)
+                        }
                       >
                         Delete
                       </button>
@@ -1081,8 +1215,8 @@ export default function GameTagPage() {
       </div>
 
       <div className="text-xs text-zinc-500 pb-4">
-        Step 1: create and refine clips • Step 2: assign players,
-        actions, pitch areas, and notes
+        Step 1: create and refine clips • Step 2: add multiple
+        player events and tags to each clip
       </div>
     </div>
   );
