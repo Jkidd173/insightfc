@@ -78,11 +78,22 @@ function isTypingTarget(target: EventTarget | null) {
 export default function GameTagPage() {
   const params = useParams<{ gameId: string }>();
   const router = useRouter();
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  /*
+    This ref prevents one accidental double-fire,
+    but becomes available again immediately after
+    the database save finishes.
+  */
+  const savingClipRef = useRef(false);
 
   const gameId = useMemo(() => {
     const raw = params?.gameId;
-    return Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
+
+    return Array.isArray(raw)
+      ? raw[0] ?? ""
+      : raw ?? "";
   }, [params]);
 
   const [mounted, setMounted] = useState(false);
@@ -98,9 +109,8 @@ export default function GameTagPage() {
     useState(0);
 
   const [videoLoading, setVideoLoading] = useState(true);
-  const [videoError, setVideoError] = useState<string | null>(
-    null
-  );
+  const [videoError, setVideoError] =
+    useState<string | null>(null);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -108,27 +118,24 @@ export default function GameTagPage() {
   const [clips, setClips] = useState<ClipRow[]>([]);
   const [clipsLoading, setClipsLoading] = useState(true);
 
-  const [draftStart, setDraftStart] = useState<number | null>(
-    null
-  );
-  const [draftEnd, setDraftEnd] = useState<number | null>(
-    null
-  );
+  const [loopClipId, setLoopClipId] =
+    useState<string | null>(null);
 
-  const [editingClipId, setEditingClipId] = useState<
-    string | null
-  >(null);
+  const [saveNotice, setSaveNotice] =
+    useState<string | null>(null);
 
-  const [saving, setSaving] = useState(false);
+  const [savingClip, setSavingClip] = useState(false);
 
-  const [loopClipId, setLoopClipId] = useState<string | null>(
-    null
-  );
+  const noticeTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedVideo =
     videos.length > 0
       ? videos[
-          Math.min(selectedVideoIndex, videos.length - 1)
+          Math.min(
+            selectedVideoIndex,
+            videos.length - 1
+          )
         ]
       : null;
 
@@ -139,20 +146,27 @@ export default function GameTagPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/games/${gameId}`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/games/${gameId}`,
+        {
+          cache: "no-store",
+        }
+      );
 
       const json = await response.json();
 
       if (!response.ok || !json.ok) {
-        throw new Error(json?.error || "Failed to load game.");
+        throw new Error(
+          json?.error || "Failed to load game."
+        );
       }
 
       setGame(json.data);
     } catch (e: any) {
       setGame(null);
-      setError(e?.message || "Failed to load game.");
+      setError(
+        e?.message || "Failed to load game."
+      );
     } finally {
       setLoading(false);
     }
@@ -216,13 +230,20 @@ export default function GameTagPage() {
         const { data, error: signedError } =
           await supabase.storage
             .from("match-videos")
-            .createSignedUrl(path, 60 * 60 * 6);
+            .createSignedUrl(
+              path,
+              60 * 60 * 6
+            );
 
-        if (signedError || !data?.signedUrl) {
+        if (
+          signedError ||
+          !data?.signedUrl
+        ) {
           console.error(
             "Failed to create video URL:",
             signedError
           );
+
           continue;
         }
 
@@ -235,9 +256,11 @@ export default function GameTagPage() {
 
       if (loadedVideos.length === 0) {
         setVideos([]);
+
         setVideoError(
           "No uploaded video was found for this match."
         );
+
         return;
       }
 
@@ -245,8 +268,10 @@ export default function GameTagPage() {
       setSelectedVideoIndex(0);
     } catch (e: any) {
       setVideos([]);
+
       setVideoError(
-        e?.message || "Failed to load match video."
+        e?.message ||
+          "Failed to load match video."
       );
     } finally {
       setVideoLoading(false);
@@ -261,21 +286,87 @@ export default function GameTagPage() {
     try {
       const supabase = supabaseBrowser();
 
-      const { data, error: clipsError } = await supabase
-        .from("clips")
-        .select("*")
-        .eq("game_id", gameId)
-        .order("start_seconds", { ascending: true });
+      const { data, error: clipsError } =
+        await supabase
+          .from("clips")
+          .select("*")
+          .eq("game_id", gameId)
+          .order("start_seconds", {
+            ascending: true,
+          });
 
       if (clipsError) {
-        throw new Error(clipsError.message);
+        throw new Error(
+          clipsError.message
+        );
       }
 
-      setClips((data ?? []) as ClipRow[]);
+      setClips(
+        (data ?? []) as ClipRow[]
+      );
     } catch (e: any) {
-      setError(e?.message || "Failed to load clips.");
+      setError(
+        e?.message ||
+          "Failed to load clips."
+      );
     } finally {
       setClipsLoading(false);
+    }
+  }
+
+  function showSaveNotice(message: string) {
+    setSaveNotice(message);
+
+    if (noticeTimerRef.current) {
+      clearTimeout(
+        noticeTimerRef.current
+      );
+    }
+
+    noticeTimerRef.current =
+      setTimeout(() => {
+        setSaveNotice(null);
+      }, 1800);
+  }
+
+  function syncVideoTime() {
+    const video = videoRef.current;
+
+    if (!video) return;
+
+    setCurrentTime(
+      video.currentTime || 0
+    );
+
+    setDuration(
+      video.duration || 0
+    );
+
+    if (loopClipId) {
+      const clip = clips.find(
+        (item) =>
+          item.id === loopClipId
+      );
+
+      if (clip) {
+        const start = clipNumber(
+          clip.start_seconds
+        );
+
+        const end = clipNumber(
+          clip.end_seconds
+        );
+
+        if (
+          video.currentTime >= end
+        ) {
+          video.currentTime = start;
+
+          video
+            .play()
+            .catch(() => {});
+        }
+      }
     }
   }
 
@@ -283,232 +374,257 @@ export default function GameTagPage() {
     setLoopClipId(null);
   }
 
-  function cancelDraft() {
-    setDraftStart(null);
-    setDraftEnd(null);
-    setEditingClipId(null);
-  }
-
-  function syncVideoTime() {
-    const video = videoRef.current;
-    if (!video) return;
-
-    setCurrentTime(video.currentTime || 0);
-    setDuration(video.duration || 0);
-
-    if (loopClipId) {
-      const clip = clips.find(
-        (item) => item.id === loopClipId
-      );
-
-      if (clip) {
-        const start = clipNumber(clip.start_seconds);
-        const end = clipNumber(clip.end_seconds);
-
-        if (video.currentTime >= end) {
-          video.currentTime = start;
-          video.play().catch(() => {});
-        }
-      }
-    }
-  }
-
-  function createDefaultDraft() {
-    if (!selectedVideo || !videoRef.current) return;
-
-    stopLoop();
-
-    const video = videoRef.current;
-    const center = video.currentTime || 0;
-
-    const videoDuration =
-      Number.isFinite(video.duration) && video.duration > 0
-        ? video.duration
-        : duration;
-
-    const start = Math.max(0, center - 4);
-
-    const end =
-      videoDuration > 0
-        ? Math.min(videoDuration, center + 4)
-        : center + 4;
-
-    setEditingClipId(null);
-    setDraftStart(Number(start.toFixed(1)));
-    setDraftEnd(Number(end.toFixed(1)));
-  }
-
   function toggleVideoPlayback() {
     const video = videoRef.current;
 
-    if (!video || !selectedVideo) return;
+    if (!video || !selectedVideo) {
+      return;
+    }
 
-    if (video.paused || video.ended) {
-      video.play().catch(() => {});
+    stopLoop();
+
+    if (
+      video.paused ||
+      video.ended
+    ) {
+      video
+        .play()
+        .catch(() => {});
     } else {
       video.pause();
     }
   }
 
-  async function saveDraft() {
+  /*
+    FAST CLIPPING
+
+    Whatever the video is doing, this immediately
+    saves a clip centered on the current playhead.
+
+    Default:
+    4 seconds before
+    4 seconds after
+
+    It does NOT pause the video.
+  */
+  async function saveInstantClip() {
     if (
       !selectedVideo ||
-      draftStart === null ||
-      draftEnd === null
+      !videoRef.current ||
+      !userId
     ) {
       return;
     }
 
-    if (!userId) {
-      setError("You must be signed in to save clips.");
+    if (savingClipRef.current) {
       return;
     }
 
-    const start = Math.max(0, Number(draftStart));
-    const end = Math.max(0, Number(draftEnd));
+    const video = videoRef.current;
 
-    if (!Number.isFinite(start) || !Number.isFinite(end)) {
-      setError("Clip start and end must be valid numbers.");
-      return;
-    }
+    const center =
+      video.currentTime || 0;
+
+    const videoDuration =
+      Number.isFinite(
+        video.duration
+      ) && video.duration > 0
+        ? video.duration
+        : duration;
+
+    const start = Math.max(
+      0,
+      center - 4
+    );
+
+    const end =
+      videoDuration > 0
+        ? Math.min(
+            videoDuration,
+            center + 4
+          )
+        : center + 4;
 
     if (end <= start) {
-      setError("Clip end must be after clip start.");
       return;
     }
 
-    if (duration > 0 && end > duration + 0.1) {
-      setError("Clip end cannot be after the video ends.");
-      return;
-    }
-
-    setSaving(true);
+    savingClipRef.current = true;
+    setSavingClip(true);
     setError(null);
 
     try {
-      const supabase = supabaseBrowser();
+      const supabase =
+        supabaseBrowser();
 
-      if (editingClipId) {
-        const { error: updateError } = await supabase
-          .from("clips")
-          .update({
-            start_seconds: Number(start.toFixed(3)),
-            end_seconds: Number(end.toFixed(3)),
-            video_path: selectedVideo.path,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingClipId);
-
-        if (updateError) {
-          throw new Error(updateError.message);
-        }
-      } else {
-        const { error: insertError } = await supabase
+      const { data, error: insertError } =
+        await supabase
           .from("clips")
           .insert({
             game_id: gameId,
             player_id: null,
             created_by: userId,
-            video_path: selectedVideo.path,
-            start_seconds: Number(start.toFixed(3)),
-            end_seconds: Number(end.toFixed(3)),
+            video_path:
+              selectedVideo.path,
+            start_seconds: Number(
+              start.toFixed(3)
+            ),
+            end_seconds: Number(
+              end.toFixed(3)
+            ),
             action: null,
             area: null,
             notes: null,
-          });
+          })
+          .select("*")
+          .single();
 
-        if (insertError) {
-          throw new Error(insertError.message);
-        }
+      if (insertError) {
+        throw new Error(
+          insertError.message
+        );
       }
 
-      cancelDraft();
-      await loadClips();
+      /*
+        Add the new clip directly to the screen.
+        No full reload is needed, which keeps
+        clipping fast.
+      */
+      const newClip =
+        data as ClipRow;
+
+      setClips((existing) =>
+        [...existing, newClip].sort(
+          (a, b) =>
+            clipNumber(
+              a.start_seconds
+            ) -
+            clipNumber(
+              b.start_seconds
+            )
+        )
+      );
+
+      showSaveNotice(
+        `Clip saved • ${formatTime(
+          center
+        )}`
+      );
     } catch (e: any) {
-      setError(e?.message || "Failed to save clip.");
+      setError(
+        e?.message ||
+          "Failed to save clip."
+      );
     } finally {
-      setSaving(false);
+      savingClipRef.current =
+        false;
+
+      setSavingClip(false);
     }
   }
 
-  function editClip(clip: ClipRow) {
-    stopLoop();
-
-    const videoIndex = videos.findIndex(
-      (video) => video.path === clip.video_path
-    );
-
-    if (videoIndex >= 0) {
-      setSelectedVideoIndex(videoIndex);
-    }
-
-    setEditingClipId(clip.id);
-    setDraftStart(clipNumber(clip.start_seconds));
-    setDraftEnd(clipNumber(clip.end_seconds));
-  }
-
-  async function deleteClip(clip: ClipRow) {
-    const confirmed = window.confirm(
-      `Delete this ${(
-        clipNumber(clip.end_seconds) -
-        clipNumber(clip.start_seconds)
-      ).toFixed(1)} second clip?`
-    );
+  async function deleteClip(
+    clip: ClipRow
+  ) {
+    const confirmed =
+      window.confirm(
+        `Delete this ${(
+          clipNumber(
+            clip.end_seconds
+          ) -
+          clipNumber(
+            clip.start_seconds
+          )
+        ).toFixed(
+          1
+        )} second clip?`
+      );
 
     if (!confirmed) return;
 
     try {
-      const supabase = supabaseBrowser();
+      const supabase =
+        supabaseBrowser();
 
-      const { error: deleteError } = await supabase
-        .from("clips")
-        .delete()
-        .eq("id", clip.id);
+      const { error: deleteError } =
+        await supabase
+          .from("clips")
+          .delete()
+          .eq("id", clip.id);
 
       if (deleteError) {
-        throw new Error(deleteError.message);
+        throw new Error(
+          deleteError.message
+        );
       }
 
-      if (loopClipId === clip.id) {
+      if (
+        loopClipId === clip.id
+      ) {
         stopLoop();
       }
 
-      if (editingClipId === clip.id) {
-        cancelDraft();
-      }
-
-      await loadClips();
+      setClips((existing) =>
+        existing.filter(
+          (item) =>
+            item.id !== clip.id
+        )
+      );
     } catch (e: any) {
-      setError(e?.message || "Failed to delete clip.");
+      setError(
+        e?.message ||
+          "Failed to delete clip."
+      );
     }
   }
 
-  function watchClip(clip: ClipRow) {
-    const videoIndex = videos.findIndex(
-      (video) => video.path === clip.video_path
-    );
+  function watchClip(
+    clip: ClipRow
+  ) {
+    const videoIndex =
+      videos.findIndex(
+        (video) =>
+          video.path ===
+          clip.video_path
+      );
 
     if (videoIndex < 0) {
-      setError("The video for this clip could not be found.");
+      setError(
+        "The video for this clip could not be found."
+      );
+
       return;
     }
 
     setError(null);
-    setSelectedVideoIndex(videoIndex);
+    setSelectedVideoIndex(
+      videoIndex
+    );
     setLoopClipId(clip.id);
-    cancelDraft();
 
     window.setTimeout(() => {
-      const video = videoRef.current;
+      const video =
+        videoRef.current;
+
       if (!video) return;
 
-      video.currentTime = clipNumber(clip.start_seconds);
-      video.play().catch(() => {});
+      video.currentTime =
+        clipNumber(
+          clip.start_seconds
+        );
+
+      video
+        .play()
+        .catch(() => {});
     }, 100);
   }
 
-  function jumpTo(seconds: number) {
-    const video = videoRef.current;
+  function jumpTo(
+    seconds: number
+  ) {
+    const video =
+      videoRef.current;
+
     if (!video) return;
 
     stopLoop();
@@ -516,7 +632,9 @@ export default function GameTagPage() {
     const safe = Math.max(
       0,
       Math.min(
-        duration > 0 ? duration : seconds,
+        duration > 0
+          ? duration
+          : seconds,
         seconds
       )
     );
@@ -525,21 +643,40 @@ export default function GameTagPage() {
     setCurrentTime(safe);
   }
 
-  function changeVideo(index: number) {
+  function changeVideo(
+    index: number
+  ) {
     stopLoop();
-    cancelDraft();
 
-    setSelectedVideoIndex(index);
+    setSelectedVideoIndex(
+      index
+    );
+
     setCurrentTime(0);
     setDuration(0);
   }
 
   useEffect(() => {
     setMounted(true);
+
+    return () => {
+      if (
+        noticeTimerRef.current
+      ) {
+        clearTimeout(
+          noticeTimerRef.current
+        );
+      }
+    };
   }, []);
 
   useEffect(() => {
-    if (!mounted || !gameId) return;
+    if (
+      !mounted ||
+      !gameId
+    ) {
+      return;
+    }
 
     loadGame();
     loadVideos();
@@ -551,42 +688,62 @@ export default function GameTagPage() {
   /*
     KEYBOARD WORKFLOW
 
-    SPACE:
-    Create an 8-second clip draft centered on the playhead.
+    SPACE
+    Instantly saves an 8-second clip.
 
-    LEFT SHIFT / RIGHT SHIFT:
-    Play or pause the active match video.
+    SHIFT
+    Play / Pause.
 
-    Shortcuts are ignored while typing or editing controls.
+    Keyboard shortcuts are ignored
+    while typing in a control.
   */
   useEffect(() => {
     if (!mounted) return;
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) return;
-
-      if (event.code === "Space") {
-        event.preventDefault();
-
-        if (event.repeat) return;
-
-        createDefaultDraft();
+    function handleKeyDown(
+      event: KeyboardEvent
+    ) {
+      if (
+        isTypingTarget(
+          event.target
+        )
+      ) {
         return;
       }
 
       if (
-        event.code === "ShiftLeft" ||
-        event.code === "ShiftRight"
+        event.code === "Space"
       ) {
         event.preventDefault();
 
-        if (event.repeat) return;
+        if (event.repeat) {
+          return;
+        }
+
+        void saveInstantClip();
+        return;
+      }
+
+      if (
+        event.code ===
+          "ShiftLeft" ||
+        event.code ===
+          "ShiftRight"
+      ) {
+        event.preventDefault();
+
+        if (event.repeat) {
+          return;
+        }
 
         toggleVideoPlayback();
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
 
     return () => {
       window.removeEventListener(
@@ -599,34 +756,66 @@ export default function GameTagPage() {
   }, [
     mounted,
     selectedVideo,
+    userId,
     duration,
-    currentTime,
     loopClipId,
   ]);
 
   useEffect(() => {
-    if (!loopClipId) return;
+    if (!loopClipId) {
+      return;
+    }
 
     const clip = clips.find(
-      (item) => item.id === loopClipId
+      (item) =>
+        item.id === loopClipId
     );
 
-    if (!clip || !selectedVideo) return;
+    if (
+      !clip ||
+      !selectedVideo
+    ) {
+      return;
+    }
 
-    if (clip.video_path !== selectedVideo.path) return;
+    if (
+      clip.video_path !==
+      selectedVideo.path
+    ) {
+      return;
+    }
 
-    const timer = window.setTimeout(() => {
-      const video = videoRef.current;
-      if (!video) return;
+    const timer =
+      window.setTimeout(() => {
+        const video =
+          videoRef.current;
 
-      video.currentTime = clipNumber(clip.start_seconds);
-      video.play().catch(() => {});
-    }, 150);
+        if (!video) return;
 
-    return () => window.clearTimeout(timer);
-  }, [selectedVideoIndex, loopClipId, clips, selectedVideo]);
+        video.currentTime =
+          clipNumber(
+            clip.start_seconds
+          );
 
-  if (!mounted) return null;
+        video
+          .play()
+          .catch(() => {});
+      }, 150);
+
+    return () =>
+      window.clearTimeout(
+        timer
+      );
+  }, [
+    selectedVideoIndex,
+    loopClipId,
+    clips,
+    selectedVideo,
+  ]);
+
+  if (!mounted) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -657,7 +846,9 @@ export default function GameTagPage() {
 
         <button
           className="btn-ghost"
-          onClick={() => router.back()}
+          onClick={() =>
+            router.back()
+          }
         >
           Go Back
         </button>
@@ -679,16 +870,24 @@ export default function GameTagPage() {
           </h1>
 
           <p className="text-sm text-zinc-400 mt-2">
-            Find the moments that matter. Tag the clips afterward.
+            Fly through the match and
+            capture every event. You&apos;ll
+            tag the details afterward.
           </p>
 
           <div className="flex flex-wrap gap-2 mt-3 text-xs">
-            <span className="border border-zinc-700 rounded-lg px-3 py-1.5 text-zinc-300">
-              <b className="text-white">Space</b> — Create 8s Clip
+            <span className="border border-yellow-500/50 bg-yellow-500/5 rounded-lg px-3 py-1.5 text-zinc-300">
+              <b className="text-yellow-300">
+                Space
+              </b>{" "}
+              — Save 8s Clip
             </span>
 
             <span className="border border-zinc-700 rounded-lg px-3 py-1.5 text-zinc-300">
-              <b className="text-white">Shift</b> — Play / Pause
+              <b className="text-white">
+                Shift
+              </b>{" "}
+              — Play / Pause
             </span>
           </div>
         </div>
@@ -696,7 +895,9 @@ export default function GameTagPage() {
         <div className="flex flex-wrap gap-3">
           <button
             className="btn-ghost"
-            onClick={() => router.back()}
+            onClick={() =>
+              router.back()
+            }
           >
             Back
           </button>
@@ -713,14 +914,17 @@ export default function GameTagPage() {
 
           <button
             className="btn-primary"
-            disabled={clips.length === 0}
+            disabled={
+              clips.length === 0
+            }
             onClick={() =>
               window.alert(
                 "Step 2: Tag Clips is next. Your clips are safely saved."
               )
             }
           >
-            Tag Clips ({clips.length})
+            Tag Clips (
+            {clips.length})
           </button>
         </div>
       </div>
@@ -735,12 +939,14 @@ export default function GameTagPage() {
 
             <div className="font-semibold mt-1">
               {game.date} — vs{" "}
-              {game.opponent ?? "(Opponent?)"}
+              {game.opponent ??
+                "(Opponent?)"}
             </div>
           </div>
 
           <div className="text-sm text-zinc-400">
-            {game.type} • {game.status}
+            {game.type} •{" "}
+            {game.status}
           </div>
         </div>
       </div>
@@ -751,8 +957,8 @@ export default function GameTagPage() {
         </div>
       ) : null}
 
-      {/* LARGE VIDEO */}
-      <div className="space-y-4">
+      {/* VIDEO WORKSPACE */}
+      <div className="relative space-y-4">
         <div className="card p-3 md:p-4">
           {videoLoading ? (
             <div className="w-full aspect-video bg-black rounded-xl flex items-center justify-center text-zinc-400">
@@ -760,37 +966,54 @@ export default function GameTagPage() {
             </div>
           ) : videoError ? (
             <div className="w-full aspect-video bg-black rounded-xl flex flex-col items-center justify-center gap-4 text-center text-zinc-400 p-8">
-              <div>{videoError}</div>
+              <div>
+                {videoError}
+              </div>
 
               <button
                 className="btn-ghost"
-                onClick={loadVideos}
+                onClick={
+                  loadVideos
+                }
               >
                 Retry Video
               </button>
             </div>
           ) : selectedVideo ? (
             <video
-              key={selectedVideo.signedUrl}
+              key={
+                selectedVideo.signedUrl
+              }
               ref={videoRef}
-              src={selectedVideo.signedUrl}
+              src={
+                selectedVideo.signedUrl
+              }
               controls
               playsInline
               preload="metadata"
-              className="w-full max-h-[72vh] bg-black rounded-xl"
-              onLoadedMetadata={(event) => {
+              className="w-full max-h-[76vh] bg-black rounded-xl"
+              onLoadedMetadata={(
+                event
+              ) => {
                 setDuration(
-                  event.currentTarget.duration || 0
+                  event.currentTarget
+                    .duration || 0
                 );
 
                 setCurrentTime(
-                  event.currentTarget.currentTime || 0
+                  event.currentTarget
+                    .currentTime || 0
                 );
               }}
-              onTimeUpdate={syncVideoTime}
-              onSeeked={syncVideoTime}
+              onTimeUpdate={
+                syncVideoTime
+              }
+              onSeeked={
+                syncVideoTime
+              }
             >
-              Your browser does not support video playback.
+              Your browser does not
+              support video playback.
             </video>
           ) : (
             <div className="w-full aspect-video bg-black rounded-xl flex items-center justify-center text-zinc-400">
@@ -799,7 +1022,14 @@ export default function GameTagPage() {
           )}
         </div>
 
-        {/* VIDEO TOOLBAR */}
+        {/* SAVE CONFIRMATION */}
+        {saveNotice ? (
+          <div className="fixed bottom-6 right-6 z-50 bg-yellow-400 text-black font-semibold rounded-xl px-5 py-3 shadow-2xl">
+            ✓ {saveNotice}
+          </div>
+        ) : null}
+
+        {/* VIDEO CONTROLS */}
         {selectedVideo ? (
           <div className="card space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -809,7 +1039,9 @@ export default function GameTagPage() {
                 </div>
 
                 <div className="text-2xl font-mono font-bold text-yellow-300">
-                  {formatTime(currentTime)}
+                  {formatTime(
+                    currentTime
+                  )}
                 </div>
               </div>
 
@@ -817,7 +1049,9 @@ export default function GameTagPage() {
                 <button
                   className="btn-ghost"
                   onClick={() =>
-                    jumpTo(currentTime - 5)
+                    jumpTo(
+                      currentTime - 5
+                    )
                   }
                 >
                   −5 sec
@@ -826,7 +1060,9 @@ export default function GameTagPage() {
                 <button
                   className="btn-ghost"
                   onClick={() =>
-                    jumpTo(currentTime - 1)
+                    jumpTo(
+                      currentTime - 1
+                    )
                   }
                 >
                   −1 sec
@@ -835,7 +1071,9 @@ export default function GameTagPage() {
                 <button
                   className="btn-ghost"
                   onClick={() =>
-                    jumpTo(currentTime + 1)
+                    jumpTo(
+                      currentTime + 1
+                    )
                   }
                 >
                   +1 sec
@@ -844,7 +1082,9 @@ export default function GameTagPage() {
                 <button
                   className="btn-ghost"
                   onClick={() =>
-                    jumpTo(currentTime + 5)
+                    jumpTo(
+                      currentTime + 5
+                    )
                   }
                 >
                   +5 sec
@@ -852,23 +1092,28 @@ export default function GameTagPage() {
 
                 <button
                   className="btn-primary"
-                  onClick={createDefaultDraft}
+                  disabled={
+                    savingClip
+                  }
+                  onClick={() =>
+                    void saveInstantClip()
+                  }
                 >
-                  Create 8s Clip
+                  {savingClip
+                    ? "Saving…"
+                    : "Save 8s Clip"}
                 </button>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
-              <span>
-                Spacebar creates a clip at the playhead.
-              </span>
-
-              <span>•</span>
-
-              <span>
-                Either Shift key plays or pauses.
-              </span>
+            <div className="text-xs text-zinc-500">
+              Every clip saves
+              immediately at 4 seconds
+              before + 4 seconds after
+              the playhead. Keep the
+              video moving and press
+              Space whenever something
+              happens.
             </div>
 
             {videos.length > 1 ? (
@@ -879,211 +1124,45 @@ export default function GameTagPage() {
 
                 <select
                   className="select w-full"
-                  value={selectedVideoIndex}
-                  onChange={(event) =>
+                  value={
+                    selectedVideoIndex
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     changeVideo(
-                      Number(event.target.value)
+                      Number(
+                        event.target
+                          .value
+                      )
                     )
                   }
                 >
-                  {videos.map((video, index) => (
-                    <option
-                      key={video.path}
-                      value={index}
-                    >
-                      Part {index + 1} — {video.name}
-                    </option>
-                  ))}
+                  {videos.map(
+                    (
+                      video,
+                      index
+                    ) => (
+                      <option
+                        key={
+                          video.path
+                        }
+                        value={
+                          index
+                        }
+                      >
+                        Part{" "}
+                        {index + 1} —{" "}
+                        {video.name}
+                      </option>
+                    )
+                  )}
                 </select>
               </div>
             ) : null}
           </div>
         ) : null}
       </div>
-
-      {/* CLIP EDITOR */}
-      {draftStart !== null && draftEnd !== null ? (
-        <div className="card border-yellow-500/50 space-y-5">
-          <div className="flex flex-wrap justify-between gap-3">
-            <div>
-              <div className="text-xs uppercase tracking-[0.15em] text-yellow-400">
-                {editingClipId
-                  ? "Editing Clip"
-                  : "New Clip"}
-              </div>
-
-              <div className="font-semibold mt-1">
-                Adjust the exact event window
-              </div>
-            </div>
-
-            <div className="text-sm text-zinc-400">
-              Length:{" "}
-              <span className="text-white font-semibold">
-                {Math.max(
-                  0,
-                  draftEnd - draftStart
-                ).toFixed(1)}
-                s
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="space-y-2">
-              <span className="text-xs text-zinc-400">
-                Clip starts at
-              </span>
-
-              <input
-                className="input w-full"
-                type="number"
-                min={0}
-                step={0.1}
-                value={draftStart}
-                onChange={(event) =>
-                  setDraftStart(
-                    Number(event.target.value)
-                  )
-                }
-              />
-
-              <span className="text-xs text-zinc-500">
-                {formatTime(draftStart)}
-              </span>
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-xs text-zinc-400">
-                Clip ends at
-              </span>
-
-              <input
-                className="input w-full"
-                type="number"
-                min={0}
-                step={0.1}
-                value={draftEnd}
-                onChange={(event) =>
-                  setDraftEnd(
-                    Number(event.target.value)
-                  )
-                }
-              />
-
-              <span className="text-xs text-zinc-500">
-                {formatTime(draftEnd)}
-              </span>
-            </label>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="btn-ghost"
-              onClick={() => {
-                if (!videoRef.current) return;
-
-                videoRef.current.currentTime =
-                  draftStart;
-
-                setCurrentTime(draftStart);
-
-                videoRef.current
-                  .play()
-                  .catch(() => {});
-              }}
-            >
-              Preview From Start
-            </button>
-
-            <button
-              className="btn-ghost"
-              onClick={() =>
-                setDraftStart(
-                  Number(
-                    Math.max(
-                      0,
-                      draftStart - 0.5
-                    ).toFixed(1)
-                  )
-                )
-              }
-            >
-              Start −0.5s
-            </button>
-
-            <button
-              className="btn-ghost"
-              onClick={() =>
-                setDraftStart(
-                  Number(
-                    (draftStart + 0.5).toFixed(1)
-                  )
-                )
-              }
-            >
-              Start +0.5s
-            </button>
-
-            <button
-              className="btn-ghost"
-              onClick={() =>
-                setDraftEnd(
-                  Number(
-                    Math.max(
-                      0,
-                      draftEnd - 0.5
-                    ).toFixed(1)
-                  )
-                )
-              }
-            >
-              End −0.5s
-            </button>
-
-            <button
-              className="btn-ghost"
-              onClick={() =>
-                setDraftEnd(
-                  Number(
-                    (draftEnd + 0.5).toFixed(1)
-                  )
-                )
-              }
-            >
-              End +0.5s
-            </button>
-          </div>
-
-          <div className="text-xs text-zinc-500">
-            Default clips are 4 seconds before + 4 seconds
-            after the playhead. Shorten them, lengthen them,
-            or overlap them as much as you need.
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              className="btn-primary"
-              disabled={saving}
-              onClick={saveDraft}
-            >
-              {saving
-                ? "Saving…"
-                : editingClipId
-                ? "Save Changes"
-                : "Save Clip"}
-            </button>
-
-            <button
-              className="btn-ghost"
-              disabled={saving}
-              onClick={cancelDraft}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {/* CLIP QUEUE */}
       <div className="card space-y-4">
@@ -1094,13 +1173,14 @@ export default function GameTagPage() {
             </h2>
 
             <p className="text-sm text-zinc-400 mt-1">
-              Clips may overlap. One clip can contain multiple
-              player events and multiple tags.
+              Cleanup, length
+              adjustments and detailed
+              tagging happen in Step 2.
             </p>
           </div>
 
           <div className="text-sm text-zinc-400">
-            {clips.length} total
+            {clips.length} saved
           </div>
         </div>
 
@@ -1115,108 +1195,130 @@ export default function GameTagPage() {
             </div>
 
             <div className="text-sm text-zinc-400 mt-2">
-              Play or scrub the match to an event, then press
-              Spacebar or click Create 8s Clip.
+              Start the match with
+              Shift, then hit Space
+              whenever you see an event.
             </div>
           </div>
         ) : (
           <div className="space-y-3">
-            {clips.map((clip, index) => {
-              const start = clipNumber(
-                clip.start_seconds
-              );
+            {clips.map(
+              (clip, index) => {
+                const start =
+                  clipNumber(
+                    clip.start_seconds
+                  );
 
-              const end = clipNumber(
-                clip.end_seconds
-              );
+                const end =
+                  clipNumber(
+                    clip.end_seconds
+                  );
 
-              const clipVideoIndex =
-                videos.findIndex(
-                  (video) =>
-                    video.path === clip.video_path
-                );
+                const clipVideoIndex =
+                  videos.findIndex(
+                    (video) =>
+                      video.path ===
+                      clip.video_path
+                  );
 
-              return (
-                <div
-                  key={clip.id}
-                  className={`border rounded-xl p-4 ${
-                    loopClipId === clip.id
-                      ? "border-yellow-400 bg-yellow-400/5"
-                      : "border-zinc-800 bg-black/30"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <div className="font-semibold">
-                        Clip {index + 1}
+                return (
+                  <div
+                    key={clip.id}
+                    className={`border rounded-xl p-4 ${
+                      loopClipId ===
+                      clip.id
+                        ? "border-yellow-400 bg-yellow-400/5"
+                        : "border-zinc-800 bg-black/30"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <div className="font-semibold">
+                          Clip{" "}
+                          {index + 1}
+                        </div>
+
+                        <div className="text-sm text-zinc-300 mt-1">
+                          {formatTime(
+                            start
+                          )}{" "}
+                          →{" "}
+                          {formatTime(
+                            end
+                          )}
+                        </div>
+
+                        <div className="text-xs text-zinc-500 mt-1">
+                          {(
+                            end - start
+                          ).toFixed(
+                            1
+                          )}{" "}
+                          seconds
+                          {clipVideoIndex >=
+                          0
+                            ? ` • Video part ${
+                                clipVideoIndex +
+                                1
+                              }`
+                            : ""}
+                          {" • "}
+                          {clip.action
+                            ? clip.action
+                            : "Ready to tag"}
+                        </div>
                       </div>
 
-                      <div className="text-sm text-zinc-300 mt-1">
-                        {formatTime(start)} →{" "}
-                        {formatTime(end)}
-                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {loopClipId ===
+                        clip.id ? (
+                          <button
+                            className="btn-ghost"
+                            onClick={
+                              stopLoop
+                            }
+                          >
+                            Stop Loop
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-ghost"
+                            onClick={() =>
+                              watchClip(
+                                clip
+                              )
+                            }
+                          >
+                            Watch
+                          </button>
+                        )}
 
-                      <div className="text-xs text-zinc-500 mt-1">
-                        {(end - start).toFixed(1)} seconds
-                        {clipVideoIndex >= 0
-                          ? ` • Video part ${
-                              clipVideoIndex + 1
-                            }`
-                          : ""}
-                        {clip.action
-                          ? ` • ${clip.action}`
-                          : " • Untagged"}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {loopClipId === clip.id ? (
                         <button
-                          className="btn-ghost"
-                          onClick={stopLoop}
-                        >
-                          Stop Loop
-                        </button>
-                      ) : (
-                        <button
-                          className="btn-ghost"
+                          className="btn-danger"
                           onClick={() =>
-                            watchClip(clip)
+                            deleteClip(
+                              clip
+                            )
                           }
                         >
-                          Watch
+                          Delete
                         </button>
-                      )}
-
-                      <button
-                        className="btn-ghost"
-                        onClick={() =>
-                          editClip(clip)
-                        }
-                      >
-                        Edit Length
-                      </button>
-
-                      <button
-                        className="btn-danger"
-                        onClick={() =>
-                          deleteClip(clip)
-                        }
-                      >
-                        Delete
-                      </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
         )}
       </div>
 
       <div className="text-xs text-zinc-500 pb-4">
-        Step 1: create and refine clips • Step 2: add multiple
-        player events and tags to each clip
+        Shift = play/pause • Space =
+        instant clip • Step 2 = edit
+        lengths, add multiple events,
+        duplicate events, assign players
+        and tag every touch
       </div>
     </div>
   );
