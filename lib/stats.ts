@@ -39,6 +39,9 @@ export type InsightFCStats = {
   shotsBlocked: number;
 
   chances: number;
+
+  possessions: number;
+  attackingThirdPossessions: number;
 };
 
 /**
@@ -77,11 +80,6 @@ export function isTurnover(event: InsightFCEvent) {
 
 /**
  * SHOTS
- *
- * Every event tagged as Shot counts as one shot.
- *
- * The defensive action "Blocked Shot" is separate and does
- * NOT count as our attacking shot.
  */
 export function isShot(event: InsightFCEvent) {
   return event.action === "Shot";
@@ -90,8 +88,7 @@ export function isShot(event: InsightFCEvent) {
 /**
  * GOALS
  *
- * Goal is stored as a Shot outcome rather than a separate
- * manual action.
+ * Goal is stored as a Shot outcome.
  */
 export function isGoal(event: InsightFCEvent) {
   return (
@@ -103,7 +100,7 @@ export function isGoal(event: InsightFCEvent) {
 /**
  * SHOTS ON TARGET
  *
- * Goals also count as shots on target.
+ * A Goal also counts as a Shot On Target.
  */
 export function isShotOnTarget(event: InsightFCEvent) {
   return (
@@ -124,6 +121,55 @@ export function isShotBlocked(event: InsightFCEvent) {
   return (
     event.action === "Shot" &&
     event.shot_outcome === "blocked"
+  );
+}
+
+/**
+ * POSSESSION
+ *
+ * A possession is counted every time a player receives
+ * or gains controlled possession of the ball.
+ *
+ * The tagging workflow stores this as:
+ *
+ * possession_start = true
+ *
+ * Examples:
+ *
+ * Abby wins the ball                 = Abby 1 possession
+ * Abby passes to Hannah              = Hannah 1 possession
+ * Abby wins it and shoots herself    = Abby 1 possession
+ *
+ * Incidental contact does not count.
+ *
+ * Defensive actions such as Pressure, Tackle and
+ * Blocked Shot do not count unless the player actually
+ * gains control, which is tagged separately as
+ * Possession Won.
+ */
+export function isPossession(event: InsightFCEvent) {
+  return (
+    Boolean(event.player_id) &&
+    event.possession_start === true
+  );
+}
+
+/**
+ * ATTACKING THIRD POSSESSION
+ *
+ * A possession counts as an Attacking Third Possession
+ * when the possession-starting event is located in any
+ * of the three attacking field zones.
+ */
+export function isAttackingThirdPossession(
+  event: InsightFCEvent
+) {
+  if (!isPossession(event)) return false;
+
+  return (
+    event.field_zone === "attacking_left" ||
+    event.field_zone === "attacking_center" ||
+    event.field_zone === "attacking_right"
   );
 }
 
@@ -196,7 +242,7 @@ export function calculateShotsOffTarget(
  * TEAM BLOCKED SHOT ATTEMPTS
  *
  * This is our attacking Shot -> Blocked outcome.
- * It is NOT the defensive "Blocked Shot" action.
+ * It is not the defensive Blocked Shot action.
  */
 export function calculateShotsBlocked(
   events: InsightFCEvent[]
@@ -209,20 +255,13 @@ export function calculateShotsBlocked(
 }
 
 /**
- * CHANCES
+ * TEAM CHANCES
  *
- * A Chance is represented by chance_id.
+ * Multiple events belonging to the same attacking
+ * opportunity share one chance_id.
  *
- * Multiple actions may belong to the same attacking chance:
- *
- * Cross Into Box -> Shot
- * Pass Into Box  -> Shot
- *
- * Those events share one chance_id and therefore count as
- * ONE Chance.
- *
- * A later attacking opportunity receives a different
- * chance_id and counts as another Chance.
+ * Therefore we count unique chance_id values rather
+ * than counting individual events.
  */
 export function calculateChances(
   events: InsightFCEvent[]
@@ -240,17 +279,13 @@ export function calculateChances(
 }
 
 /**
- * CHANCES CREATED BY PLAYER
+ * PLAYER CHANCES CREATED
  *
- * Player credit goes to the player whose Pass or Cross
- * into the box STARTED the chance.
+ * Credit goes to the player whose successful Pass or
+ * Cross into the box started the chance.
  *
- * A Shot does not give the shooter "chance created" credit
- * when the chance was already created by a teammate's
- * Pass/Cross into the box.
- *
- * A standalone Shot still creates a TEAM Chance, but does
- * not count as a player's Chance Created.
+ * A standalone Shot creates a TEAM Chance but does not
+ * give the shooter a Chance Created.
  */
 export function calculatePlayerChancesCreated(
   events: InsightFCEvent[],
@@ -278,10 +313,100 @@ export function calculatePlayerChancesCreated(
 }
 
 /**
- * MASTER TEAM STATS CALCULATOR
+ * TEAM POSSESSIONS
  *
- * Every finalized InsightFC stat will eventually feed
- * through this function.
+ * Team Possessions are the sum of all player possessions.
+ */
+export function calculatePossessions(
+  events: InsightFCEvent[]
+) {
+  return events.filter(
+    (event) =>
+      isOurTeamEvent(event) &&
+      isPossession(event)
+  ).length;
+}
+
+/**
+ * TEAM POSSESSIONS IN ATTACKING THIRD
+ */
+export function calculateAttackingThirdPossessions(
+  events: InsightFCEvent[]
+) {
+  return events.filter(
+    (event) =>
+      isOurTeamEvent(event) &&
+      isAttackingThirdPossession(event)
+  ).length;
+}
+
+/**
+ * PLAYER POSSESSIONS
+ */
+export function calculatePlayerPossessions(
+  events: InsightFCEvent[],
+  playerId: string
+) {
+  return events.filter(
+    (event) =>
+      isOurTeamEvent(event) &&
+      event.player_id === playerId &&
+      isPossession(event)
+  ).length;
+}
+
+/**
+ * PLAYER POSSESSIONS IN ATTACKING THIRD
+ */
+export function calculatePlayerAttackingThirdPossessions(
+  events: InsightFCEvent[],
+  playerId: string
+) {
+  return events.filter(
+    (event) =>
+      isOurTeamEvent(event) &&
+      event.player_id === playerId &&
+      isAttackingThirdPossession(event)
+  ).length;
+}
+
+/**
+ * POSSESSION %
+ *
+ * InsightFC defines possession percentage using controlled
+ * player possessions rather than clock time.
+ *
+ * Our Possessions
+ * ------------------------------ x 100
+ * Our Possessions + Opponent Possessions
+ *
+ * This is ready for opponent AI events once they are added.
+ */
+export function calculatePossessionPercentage(
+  events: InsightFCEvent[]
+) {
+  const ourPossessions = events.filter(
+    (event) =>
+      isOurTeamEvent(event) &&
+      isPossession(event)
+  ).length;
+
+  const opponentPossessions = events.filter(
+    (event) =>
+      event.team_side === "opponent" &&
+      isPossession(event)
+  ).length;
+
+  const total =
+    ourPossessions + opponentPossessions;
+
+  if (total === 0) return 0;
+
+  return (ourPossessions / total) * 100;
+}
+
+/**
+ * MASTER TEAM STATS CALCULATOR
  */
 export function calculateStats(
   events: InsightFCEvent[]
@@ -297,6 +422,10 @@ export function calculateStats(
     shotsBlocked: calculateShotsBlocked(events),
 
     chances: calculateChances(events),
+
+    possessions: calculatePossessions(events),
+    attackingThirdPossessions:
+      calculateAttackingThirdPossessions(events),
   };
 }
 
