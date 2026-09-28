@@ -293,24 +293,26 @@ export default async function MatchReportPage({
       style={{
         minHeight: "100vh",
         background:
-          "linear-gradient(180deg, #07111f 0%, #0b1727 100%)",
-        color: "#f8fafc",
-        padding: "32px 20px 64px",
+          "linear-gradient(180deg, #090a08 0%, #10110d 100%)",
+        color: "#f7f7f2",
+        padding: "34px 22px 70px",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 1000,
+          maxWidth: 1040,
           margin: "0 auto",
         }}
       >
+        {/* PAGE HEADER */}
+
         <div
           style={{
             display: "flex",
-            alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
+            alignItems: "flex-start",
+            gap: 20,
             flexWrap: "wrap",
             marginBottom: 28,
           }}
@@ -318,33 +320,35 @@ export default async function MatchReportPage({
           <div>
             <div
               style={{
-                color: "#facc15",
+                color: "#d8bd58",
                 fontSize: 13,
                 fontWeight: 800,
-                letterSpacing: 1.5,
+                letterSpacing: 1.4,
                 textTransform: "uppercase",
-                marginBottom: 8,
+                marginBottom: 9,
               }}
             >
-              InsightFC Match Report
+              InsightFC
             </div>
 
             <h1
               style={{
                 margin: 0,
-                fontSize: "clamp(28px, 5vw, 44px)",
+                fontSize:
+                  "clamp(32px, 5vw, 52px)",
                 lineHeight: 1,
-                fontWeight: 900,
+                fontWeight: 950,
+                letterSpacing: -1.5,
               }}
             >
-              Game Summary
+              MATCH REPORT
             </h1>
 
             <div
               style={{
-                color: "#94a3b8",
-                marginTop: 10,
-                fontSize: 14,
+                color: "#a8a89f",
+                marginTop: 12,
+                fontSize: 15,
               }}
             >
               {formatDate(game.date)}
@@ -357,55 +361,60 @@ export default async function MatchReportPage({
           <Link
             href={`/teams/${game.team_id}`}
             style={{
-              color: "#e2e8f0",
+              color: "#f7f7f2",
               textDecoration: "none",
-              border: "1px solid #334155",
-              background: "#111d2d",
-              padding: "10px 16px",
-              borderRadius: 10,
-              fontWeight: 700,
+              border: "1px solid #3b3d35",
+              background: "#171914",
+              padding: "11px 17px",
+              borderRadius: 11,
+              fontWeight: 800,
             }}
           >
-            ← Team Overview
+            ← Back to Team
           </Link>
         </div>
+
+        {/* REPORT CARD */}
 
         <section
           style={{
             background:
-              "linear-gradient(180deg, #111d2d 0%, #0d1827 100%)",
-            border: "1px solid #26364a",
-            borderRadius: 20,
+              "linear-gradient(135deg, #e7d27a 0%, #dcc56c 48%, #e6d17b 100%)",
+            border:
+              "1px solid rgba(235, 211, 105, 0.8)",
+            borderRadius: 22,
             overflow: "hidden",
             boxShadow:
-              "0 24px 70px rgba(0,0,0,0.28)",
+              "0 28px 80px rgba(0,0,0,0.38)",
           }}
         >
+          {/* MATCHUP */}
+
           <div
             style={{
-              padding: "30px 24px",
-              borderBottom:
-                "1px solid #26364a",
+              color: "#11120e",
+              padding: "36px 28px 30px",
             }}
           >
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns:
-                  "minmax(0, 1fr) 70px minmax(0, 1fr)",
+                  "minmax(0,1fr) 72px minmax(0,1fr)",
                 alignItems: "center",
-                gap: 12,
                 textAlign: "center",
+                gap: 12,
               }}
             >
               <div>
                 <div
                   style={{
-                    color: "#94a3b8",
                     fontSize: 12,
+                    fontWeight: 900,
+                    letterSpacing: 1.1,
                     textTransform: "uppercase",
-                    letterSpacing: 1.2,
-                    marginBottom: 8,
+                    marginBottom: 9,
+                    opacity: 0.72,
                   }}
                 >
                   InsightFC Team
@@ -414,8 +423,9 @@ export default async function MatchReportPage({
                 <div
                   style={{
                     fontSize:
-                      "clamp(18px, 4vw, 30px)",
-                    fontWeight: 900,
+                      "clamp(20px, 4vw, 32px)",
+                    lineHeight: 1.12,
+                    fontWeight: 950,
                   }}
                 >
                   {teamName}
@@ -424,9 +434,9 @@ export default async function MatchReportPage({
 
               <div
                 style={{
-                  color: "#64748b",
-                  fontWeight: 900,
-                  fontSize: 18,
+                  fontWeight: 950,
+                  fontSize: 20,
+                  opacity: 0.7,
                 }}
               >
                 VS
@@ -435,11 +445,12 @@ export default async function MatchReportPage({
               <div>
                 <div
                   style={{
-                    color: "#94a3b8",
                     fontSize: 12,
+                    fontWeight: 900,
+                    letterSpacing: 1.1,
                     textTransform: "uppercase",
-                    letterSpacing: 1.2,
-                    marginBottom: 8,
+                    marginBottom: 9,
+                    opacity: 0.72,
                   }}
                 >
                   Opponent
@@ -448,8 +459,9 @@ export default async function MatchReportPage({
                 <div
                   style={{
                     fontSize:
-                      "clamp(18px, 4vw, 30px)",
-                    fontWeight: 900,
+                      "clamp(20px, 4vw, 32px)",
+                    lineHeight: 1.12,
+                    fontWeight: 950,
                   }}
                 >
                   {opponentName}
@@ -463,17 +475,18 @@ export default async function MatchReportPage({
                   style={{
                     display: "grid",
                     gridTemplateColumns:
-                      "1fr 70px 1fr",
-                    textAlign: "center",
+                      "1fr 72px 1fr",
                     alignItems: "center",
-                    marginTop: 22,
+                    textAlign: "center",
+                    marginTop: 28,
                   }}
                 >
                   <div
                     style={{
-                      fontSize: 38,
-                      fontWeight: 900,
-                      color: "#facc15",
+                      fontSize:
+                        "clamp(48px, 8vw, 72px)",
+                      lineHeight: 1,
+                      fontWeight: 950,
                     }}
                   >
                     {game.team_score}
@@ -481,9 +494,9 @@ export default async function MatchReportPage({
 
                   <div
                     style={{
-                      color: "#64748b",
                       fontSize: 13,
-                      fontWeight: 800,
+                      fontWeight: 950,
+                      opacity: 0.65,
                     }}
                   >
                     FINAL
@@ -491,8 +504,10 @@ export default async function MatchReportPage({
 
                   <div
                     style={{
-                      fontSize: 38,
-                      fontWeight: 900,
+                      fontSize:
+                        "clamp(48px, 8vw, 72px)",
+                      lineHeight: 1,
+                      fontWeight: 950,
                     }}
                   >
                     {game.opponent_score}
@@ -501,91 +516,199 @@ export default async function MatchReportPage({
               )}
           </div>
 
+          {/* TEAM COLUMN LABELS */}
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "minmax(80px,1fr) minmax(150px,1.25fr) minmax(80px,1fr)",
+              alignItems: "center",
+              color: "#11120e",
+              background:
+                "rgba(255,255,255,0.16)",
+              borderTop:
+                "1px solid rgba(17,18,14,0.12)",
+              borderBottom:
+                "1px solid rgba(17,18,14,0.16)",
+              minHeight: 50,
+            }}
+          >
+            <div
+              style={{
+                textAlign: "center",
+                padding: "10px 8px",
+                fontSize: 13,
+                fontWeight: 900,
+              }}
+            >
+              {teamName}
+            </div>
+
+            <div />
+
+            <div
+              style={{
+                textAlign: "center",
+                padding: "10px 8px",
+                fontSize: 13,
+                fontWeight: 900,
+              }}
+            >
+              {opponentName}
+            </div>
+          </div>
+
+          {/* STAT TABLE */}
+
+          <div
+            style={{
+              margin: 0,
+              background: "#11120f",
+              color: "#f7f7f2",
+            }}
+          >
+            {metrics.map(
+              (metric, index) => (
+                <div
+                  key={metric.label}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "minmax(80px,1fr) minmax(150px,1.25fr) minmax(80px,1fr)",
+                    alignItems: "center",
+                    minHeight: 61,
+                    borderBottom:
+                      index ===
+                      metrics.length - 1
+                        ? "none"
+                        : "1px solid rgba(220,197,108,0.26)",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent:
+                        "center",
+                      textAlign: "center",
+                      fontSize: 20,
+                      fontWeight: 950,
+                      padding: "12px 8px",
+                    }}
+                  >
+                    {metric.ours}
+                  </div>
+
+                  <div
+                    style={{
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent:
+                        "center",
+                      textAlign: "center",
+                      color: "#e5dfc8",
+                      fontSize: 14,
+                      fontWeight: 750,
+                      padding: "12px 10px",
+                      borderLeft:
+                        "1px solid rgba(220,197,108,0.20)",
+                      borderRight:
+                        "1px solid rgba(220,197,108,0.20)",
+                    }}
+                  >
+                    {metric.label}
+                  </div>
+
+                  <div
+                    style={{
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent:
+                        "center",
+                      textAlign: "center",
+                      fontSize: 20,
+                      fontWeight: 950,
+                      color:
+                        hasOpponentData
+                          ? "#f7f7f2"
+                          : "#77796e",
+                      padding: "12px 8px",
+                    }}
+                  >
+                    {metric.opponent}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* OPPONENT NOTICE */}
+
           {!hasOpponentData && (
             <div
               style={{
-                padding: "12px 20px",
-                background:
-                  "rgba(250, 204, 21, 0.07)",
-                borderBottom:
-                  "1px solid #26364a",
-                color: "#cbd5e1",
-                fontSize: 13,
-                textAlign: "center",
+                padding: "28px",
+                color: "#11120e",
               }}
             >
-              Opponent analytics will appear
-              when opponent event data is
-              available.
-            </div>
-          )}
-
-          <div>
-            {metrics.map((metric) => (
               <div
-                key={metric.label}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "minmax(70px, 1fr) minmax(130px, 1.4fr) minmax(70px, 1fr)",
+                  display: "flex",
                   alignItems: "center",
-                  minHeight: 62,
-                  borderBottom:
-                    "1px solid #223044",
+                  gap: 13,
+                  background:
+                    "rgba(255,255,255,0.18)",
+                  border:
+                    "1px solid rgba(17,18,14,0.10)",
+                  padding: "15px 17px",
+                  borderRadius: 12,
+                  fontSize: 13,
+                  fontWeight: 700,
                 }}
               >
                 <div
                   style={{
-                    textAlign: "center",
-                    fontSize: 18,
-                    fontWeight: 900,
-                    color: "#f8fafc",
-                    padding: "12px 8px",
+                    width: 25,
+                    height: 25,
+                    minWidth: 25,
+                    borderRadius: "50%",
+                    border:
+                      "2px solid #11120e",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent:
+                      "center",
+                    fontWeight: 950,
+                    fontSize: 14,
                   }}
                 >
-                  {metric.ours}
+                  i
                 </div>
 
-                <div
-                  style={{
-                    textAlign: "center",
-                    color: "#94a3b8",
-                    fontSize: 13,
-                    fontWeight: 800,
-                    padding: "12px 8px",
-                  }}
-                >
-                  {metric.label}
-                </div>
-
-                <div
-                  style={{
-                    textAlign: "center",
-                    fontSize: 18,
-                    fontWeight: 900,
-                    color: hasOpponentData
-                      ? "#f8fafc"
-                      : "#475569",
-                    padding: "12px 8px",
-                  }}
-                >
-                  {metric.opponent}
+                <div>
+                  Opponent analytics will
+                  appear when opponent event
+                  data is available.
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </section>
 
         <div
           style={{
-            marginTop: 20,
-            color: "#64748b",
-            fontSize: 12,
+            marginTop: 18,
             textAlign: "center",
+            color: "#77796e",
+            fontSize: 12,
           }}
         >
-          Statistics are calculated from
-          tagged match events.
+          Statistics calculated from tagged
+          match events.
         </div>
       </div>
     </main>
