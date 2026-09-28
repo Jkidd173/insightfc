@@ -37,10 +37,12 @@ export type InsightFCStats = {
   shotsOnTarget: number;
   shotsOffTarget: number;
   shotsBlocked: number;
+
+  chances: number;
 };
 
 /**
- * Returns true when the event belongs to our team.
+ * TEAM SIDE
  *
  * Older events may not have team_side populated, so those
  * are treated as our_team for backwards compatibility.
@@ -51,8 +53,6 @@ function isOurTeamEvent(event: InsightFCEvent) {
 
 /**
  * TURNOVERS
- *
- * InsightFC rules:
  *
  * Failed Pass      = 1 turnover
  * Failed Cross     = 1 turnover
@@ -80,8 +80,8 @@ export function isTurnover(event: InsightFCEvent) {
  *
  * Every event tagged as Shot counts as one shot.
  *
- * The defensive action "Blocked Shot" is intentionally
- * separate and does NOT count as our attacking shot.
+ * The defensive action "Blocked Shot" is separate and does
+ * NOT count as our attacking shot.
  */
 export function isShot(event: InsightFCEvent) {
   return event.action === "Shot";
@@ -103,7 +103,7 @@ export function isGoal(event: InsightFCEvent) {
 /**
  * SHOTS ON TARGET
  *
- * Goals are also shots on target.
+ * Goals also count as shots on target.
  */
 export function isShotOnTarget(event: InsightFCEvent) {
   return (
@@ -209,6 +209,75 @@ export function calculateShotsBlocked(
 }
 
 /**
+ * CHANCES
+ *
+ * A Chance is represented by chance_id.
+ *
+ * Multiple actions may belong to the same attacking chance:
+ *
+ * Cross Into Box -> Shot
+ * Pass Into Box  -> Shot
+ *
+ * Those events share one chance_id and therefore count as
+ * ONE Chance.
+ *
+ * A later attacking opportunity receives a different
+ * chance_id and counts as another Chance.
+ */
+export function calculateChances(
+  events: InsightFCEvent[]
+) {
+  const chanceIds = new Set<string>();
+
+  for (const event of events) {
+    if (!isOurTeamEvent(event)) continue;
+    if (!event.chance_id) continue;
+
+    chanceIds.add(event.chance_id);
+  }
+
+  return chanceIds.size;
+}
+
+/**
+ * CHANCES CREATED BY PLAYER
+ *
+ * Player credit goes to the player whose Pass or Cross
+ * into the box STARTED the chance.
+ *
+ * A Shot does not give the shooter "chance created" credit
+ * when the chance was already created by a teammate's
+ * Pass/Cross into the box.
+ *
+ * A standalone Shot still creates a TEAM Chance, but does
+ * not count as a player's Chance Created.
+ */
+export function calculatePlayerChancesCreated(
+  events: InsightFCEvent[],
+  playerId: string
+) {
+  const createdChanceIds = new Set<string>();
+
+  for (const event of events) {
+    if (!isOurTeamEvent(event)) continue;
+    if (event.player_id !== playerId) continue;
+    if (!event.chance_id) continue;
+
+    const createdByBoxEntry =
+      (event.action === "Pass" ||
+        event.action === "Cross") &&
+      event.into_box === true &&
+      event.outcome === "successful";
+
+    if (createdByBoxEntry) {
+      createdChanceIds.add(event.chance_id);
+    }
+  }
+
+  return createdChanceIds.size;
+}
+
+/**
  * MASTER TEAM STATS CALCULATOR
  *
  * Every finalized InsightFC stat will eventually feed
@@ -226,6 +295,8 @@ export function calculateStats(
     shotsOnTarget: calculateShotsOnTarget(events),
     shotsOffTarget: calculateShotsOffTarget(events),
     shotsBlocked: calculateShotsBlocked(events),
+
+    chances: calculateChances(events),
   };
 }
 
