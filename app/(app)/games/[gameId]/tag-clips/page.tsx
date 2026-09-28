@@ -44,6 +44,12 @@ type ClipEventRow = {
   action: string;
   event_seconds: number | string;
   outcome: string | null;
+  shot_outcome: string | null;
+  into_box: boolean | null;
+  possession_start: boolean | null;
+  team_side: string | null;
+  event_source: string | null;
+  confidence: number | string | null;
   field_zone: string | null;
   area: string | null;
   notes: string | null;
@@ -60,19 +66,23 @@ type DraftTag = {
   playerId: string;
   action: string;
   outcome: string;
+  shotOutcome: string;
   zone: string;
+  intoBox: boolean;
   notes: string;
   eventId: string | null;
 };
 
 const ACTIONS = [
   { label: "Pass", key: "P" },
+  { label: "Cross", key: "X" },
   { label: "Carry 10+ yd", key: "C" },
   { label: "Take-on", key: "T" },
   { label: "Shot", key: "S" },
-  { label: "Goal", key: "G" },
   { label: "Assist", key: "A" },
   { label: "Possession Won", key: "W" },
+  { label: "Tackle", key: "K" },
+  { label: "Blocked Shot", key: "B" },
   { label: "Pressure", key: "R" },
 ] as const;
 
@@ -88,13 +98,22 @@ const FIELD_ZONES = [
   { id: "defensive_right", short: "DR", label: "Defensive Right" },
 ] as const;
 
+const SHOT_OUTCOMES = [
+  { id: "goal", label: "⚽ Goal" },
+  { id: "on_target", label: "On Target" },
+  { id: "off_target", label: "Off Target" },
+  { id: "blocked", label: "Blocked" },
+] as const;
+
 const TRIM_AMOUNTS = [-2, -1, -0.5, 0.5, 1, 2];
 
 const EMPTY_DRAFT: DraftTag = {
   playerId: "",
   action: "",
   outcome: "",
+  shotOutcome: "",
   zone: "",
+  intoBox: false,
   notes: "",
   eventId: null,
 };
@@ -132,12 +151,50 @@ function isTypingTarget(target: EventTarget | null) {
   );
 }
 
+function actionNeedsBinaryOutcome(action: string) {
+  return (
+    action === "Pass" ||
+    action === "Cross" ||
+    action === "Take-on" ||
+    action === "Tackle"
+  );
+}
+
+function actionNeedsShotOutcome(action: string) {
+  return action === "Shot";
+}
+
+function actionCanBeIntoBox(action: string) {
+  return action === "Pass" || action === "Cross";
+}
+
+function actionNeedsNoOutcome(action: string) {
+  return (
+    action === "Carry 10+ yd" ||
+    action === "Assist" ||
+    action === "Possession Won" ||
+    action === "Blocked Shot" ||
+    action === "Pressure"
+  );
+}
+
+function shotOutcomeLabel(value: string | null) {
+  if (!value) return "";
+
+  return (
+    SHOT_OUTCOMES.find((item) => item.id === value)?.label ??
+    value
+  );
+}
+
 function draftFromEvent(event: ClipEventRow): DraftTag {
   return {
     playerId: event.player_id ?? "team",
     action: event.action,
     outcome: event.outcome ?? "",
+    shotOutcome: event.shot_outcome ?? "",
     zone: event.field_zone ?? "",
+    intoBox: Boolean(event.into_box),
     notes: event.notes ?? "",
     eventId: event.id,
   };
@@ -184,7 +241,9 @@ export default function TagClipsPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
   const [selectedAction, setSelectedAction] = useState("");
   const [selectedOutcome, setSelectedOutcome] = useState("");
+  const [selectedShotOutcome, setSelectedShotOutcome] = useState("");
   const [selectedZone, setSelectedZone] = useState("");
+  const [intoBox, setIntoBox] = useState(false);
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
 
@@ -239,10 +298,28 @@ export default function TagClipsPage() {
 
   const clipDuration = Math.max(0, clipEnd - clipStart);
 
+  const needsBinaryOutcome =
+    actionNeedsBinaryOutcome(selectedAction);
+
+  const needsShotOutcome =
+    actionNeedsShotOutcome(selectedAction);
+
+  const canBeIntoBox =
+    actionCanBeIntoBox(selectedAction);
+
+  const outcomeComplete =
+    !selectedAction
+      ? false
+      : needsBinaryOutcome
+      ? Boolean(selectedOutcome)
+      : needsShotOutcome
+      ? Boolean(selectedShotOutcome)
+      : actionNeedsNoOutcome(selectedAction);
+
   const tagComplete =
     Boolean(selectedPlayerId) &&
     Boolean(selectedAction) &&
-    Boolean(selectedOutcome) &&
+    outcomeComplete &&
     Boolean(selectedZone);
 
   function showNoticeMessage(message: string) {
@@ -265,7 +342,9 @@ export default function TagClipsPage() {
       playerId: selectedPlayerId,
       action: selectedAction,
       outcome: selectedOutcome,
+      shotOutcome: selectedShotOutcome,
       zone: selectedZone,
+      intoBox,
       notes,
       eventId: activeEventId,
       ...override,
@@ -292,7 +371,14 @@ export default function TagClipsPage() {
 
       if (!raw) return null;
 
-      return JSON.parse(raw) as DraftTag;
+      const parsed = JSON.parse(raw) as Partial<DraftTag>;
+
+      return {
+        ...EMPTY_DRAFT,
+        ...parsed,
+        shotOutcome: parsed.shotOutcome ?? "",
+        intoBox: Boolean(parsed.intoBox),
+      };
     } catch {
       return null;
     }
@@ -302,7 +388,9 @@ export default function TagClipsPage() {
     setSelectedPlayerId(draft.playerId);
     setSelectedAction(draft.action);
     setSelectedOutcome(draft.outcome);
+    setSelectedShotOutcome(draft.shotOutcome);
     setSelectedZone(draft.zone);
+    setIntoBox(draft.intoBox);
     setNotes(draft.notes);
     setShowNotes(Boolean(draft.notes));
     setActiveEventId(draft.eventId);
@@ -314,7 +402,9 @@ export default function TagClipsPage() {
     setSelectedPlayerId(player);
     setSelectedAction("");
     setSelectedOutcome("");
+    setSelectedShotOutcome("");
     setSelectedZone("");
+    setIntoBox(false);
     setNotes("");
     setShowNotes(false);
     setActiveEventId(null);
@@ -336,6 +426,18 @@ export default function TagClipsPage() {
           JSON.stringify(blank)
         );
       } catch {}
+    }
+  }
+
+  function selectAction(action: string) {
+    setSelectedAction(action);
+    setSelectedOutcome("");
+    setSelectedShotOutcome("");
+
+    if (action === "Cross") {
+      setIntoBox(true);
+    } else if (action !== "Pass") {
+      setIntoBox(false);
     }
   }
 
@@ -413,9 +515,7 @@ export default function TagClipsPage() {
         await Promise.all([
           supabase
             .from("players")
-            .select(
-              "id,name,jersey_number,position,status"
-            )
+            .select("id,name,jersey_number,position,status")
             .eq("team_id", loadedGame.team_id)
             .order("jersey_number", { ascending: true }),
 
@@ -613,7 +713,18 @@ export default function TagClipsPage() {
         created_by: userId,
         action: selectedAction,
         event_seconds: Number(eventSeconds.toFixed(3)),
-        outcome: selectedOutcome,
+        outcome: needsBinaryOutcome
+          ? selectedOutcome
+          : null,
+        shot_outcome: needsShotOutcome
+          ? selectedShotOutcome
+          : null,
+        into_box: canBeIntoBox ? intoBox : false,
+        possession_start:
+          selectedAction === "Possession Won",
+        team_side: "our_team",
+        event_source: "manual",
+        confidence: null,
         field_zone: selectedZone,
         area: null,
         notes: notes.trim() || null,
@@ -720,7 +831,7 @@ export default function TagClipsPage() {
 
     if (!tagComplete) {
       setError(
-        "Finish Player, Action, Outcome and Location before starting another tag."
+        "Finish the required selections before starting another tag."
       );
       return;
     }
@@ -736,7 +847,9 @@ export default function TagClipsPage() {
     setSelectedPlayerId(playerToKeep);
     setSelectedAction("");
     setSelectedOutcome("");
+    setSelectedShotOutcome("");
     setSelectedZone("");
+    setIntoBox(false);
     setNotes("");
     setShowNotes(false);
     setActiveEventId(null);
@@ -973,6 +1086,24 @@ export default function TagClipsPage() {
     );
   }
 
+  function currentOutcomeLabel() {
+    if (!selectedAction) return "Outcome";
+
+    if (needsBinaryOutcome) {
+      if (selectedOutcome === "successful") return "Success";
+      if (selectedOutcome === "unsuccessful") return "Fail";
+      return "Outcome";
+    }
+
+    if (needsShotOutcome) {
+      return selectedShotOutcome
+        ? shotOutcomeLabel(selectedShotOutcome)
+        : "Shot outcome";
+    }
+
+    return "No outcome needed";
+  }
+
   useEffect(() => {
     setMounted(true);
 
@@ -994,11 +1125,6 @@ export default function TagClipsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, gameId]);
 
-  /*
-    Every click is remembered immediately as a draft.
-    Once all four required selections exist, the tag
-    also auto-saves to Supabase after a short pause.
-  */
   useEffect(() => {
     if (!mounted || !currentClip || !userId) return;
 
@@ -1025,7 +1151,9 @@ export default function TagClipsPage() {
     selectedPlayerId,
     selectedAction,
     selectedOutcome,
+    selectedShotOutcome,
     selectedZone,
+    intoBox,
     notes,
   ]);
 
@@ -1089,28 +1217,36 @@ export default function TagClipsPage() {
 
       const actionByKey: Record<string, string> = {
         p: "Pass",
+        x: "Cross",
         c: "Carry 10+ yd",
         t: "Take-on",
         s: "Shot",
-        g: "Goal",
         a: "Assist",
         w: "Possession Won",
+        k: "Tackle",
+        b: "Blocked Shot",
         r: "Pressure",
       };
 
       if (actionByKey[key]) {
         event.preventDefault();
-        setSelectedAction(actionByKey[key]);
+        selectAction(actionByKey[key]);
         return;
       }
 
-      if (key === "y") {
+      if (
+        key === "y" &&
+        actionNeedsBinaryOutcome(selectedAction)
+      ) {
         event.preventDefault();
         setSelectedOutcome("successful");
         return;
       }
 
-      if (key === "n") {
+      if (
+        key === "n" &&
+        actionNeedsBinaryOutcome(selectedAction)
+      ) {
         event.preventDefault();
         setSelectedOutcome("unsuccessful");
       }
@@ -1121,7 +1257,7 @@ export default function TagClipsPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [mounted]);
+  }, [mounted, selectedAction]);
 
   const selectedClass =
     "border-yellow-300 bg-yellow-400 text-black shadow-[0_0_0_2px_rgba(250,204,21,0.35),0_0_22px_rgba(250,204,21,0.25)]";
@@ -1304,7 +1440,7 @@ export default function TagClipsPage() {
                         ? selectedClass
                         : normalClass
                     }`}
-                    onClick={() => setSelectedAction(action.label)}
+                    onClick={() => selectAction(action.label)}
                   >
                     <span>{action.label}</span>
                     <span className="opacity-70">({action.key})</span>
@@ -1313,41 +1449,119 @@ export default function TagClipsPage() {
               </div>
             </div>
 
-            <div>
-              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                3. Outcome
-              </div>
+            {needsBinaryOutcome ? (
+              <div>
+                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  3. Outcome
+                </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
+                      selectedOutcome === "successful"
+                        ? selectedClass
+                        : normalClass
+                    }`}
+                    onClick={() =>
+                      setSelectedOutcome("successful")
+                    }
+                  >
+                    ✓ Success (Y)
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
+                      selectedOutcome === "unsuccessful"
+                        ? selectedClass
+                        : normalClass
+                    }`}
+                    onClick={() =>
+                      setSelectedOutcome("unsuccessful")
+                    }
+                  >
+                    ✕ Fail (N)
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {needsShotOutcome ? (
+              <div>
+                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  3. Shot Outcome
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  {SHOT_OUTCOMES.map((outcome) => (
+                    <button
+                      key={outcome.id}
+                      type="button"
+                      className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
+                        selectedShotOutcome === outcome.id
+                          ? selectedClass
+                          : normalClass
+                      }`}
+                      onClick={() =>
+                        setSelectedShotOutcome(outcome.id)
+                      }
+                    >
+                      {outcome.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedAction &&
+            !needsBinaryOutcome &&
+            !needsShotOutcome ? (
+              <div className="rounded-lg border border-zinc-800 bg-black/25 px-3 py-2 text-[10px] text-zinc-400">
+                No outcome selection needed for{" "}
+                <span className="font-bold text-zinc-200">
+                  {selectedAction}
+                </span>
+                .
+              </div>
+            ) : null}
+
+            {canBeIntoBox ? (
+              <div>
+                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  Chance Creation
+                </div>
+
                 <button
                   type="button"
-                  className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
-                    selectedOutcome === "successful"
-                      ? selectedClass
-                      : normalClass
+                  disabled={selectedAction === "Cross"}
+                  className={`w-full rounded-lg border px-3 py-2 text-[11px] font-bold transition ${
+                    intoBox ? selectedClass : normalClass
+                  } ${
+                    selectedAction === "Cross"
+                      ? "cursor-default"
+                      : ""
                   }`}
-                  onClick={() => setSelectedOutcome("successful")}
+                  onClick={() => {
+                    if (selectedAction !== "Cross") {
+                      setIntoBox((value) => !value);
+                    }
+                  }}
                 >
-                  ✓ Success (Y)
-                </button>
-
-                <button
-                  type="button"
-                  className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
-                    selectedOutcome === "unsuccessful"
-                      ? selectedClass
-                      : normalClass
-                  }`}
-                  onClick={() => setSelectedOutcome("unsuccessful")}
-                >
-                  ✕ Fail (N)
+                  {intoBox ? "✓ " : ""}
+                  Into Box
+                  {selectedAction === "Cross"
+                    ? " — automatic for Cross"
+                    : ""}
                 </button>
               </div>
-            </div>
+            ) : null}
 
             <div>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                4. Location
+                {needsBinaryOutcome || needsShotOutcome
+                  ? "4. Location"
+                  : "3. Location"}
               </div>
 
               <div className="mb-1 text-center text-[9px] font-bold tracking-[0.14em] text-yellow-400">
@@ -1403,21 +1617,22 @@ export default function TagClipsPage() {
 
               <div className="mt-1 text-[10px] text-zinc-400">
                 {selectedAction || "Action"} •{" "}
-                {selectedOutcome
-                  ? selectedOutcome === "successful"
-                    ? "Success"
-                    : "Fail"
-                  : "Outcome"}{" "}
-                •{" "}
+                {currentOutcomeLabel()} •{" "}
                 {selectedZone
                   ? zoneLabel(selectedZone)
                   : "Location"}
               </div>
 
+              {canBeIntoBox && intoBox ? (
+                <div className="mt-1 text-[10px] font-bold text-yellow-300">
+                  ✓ Into Box
+                </div>
+              ) : null}
+
               <div className="mt-2 text-[10px] font-semibold text-yellow-300">
                 {tagComplete
                   ? "✓ Saved automatically"
-                  : "Finish the selections above"}
+                  : "Finish the required selections above"}
               </div>
             </div>
 
@@ -1627,8 +1842,8 @@ export default function TagClipsPage() {
 
             {currentClipEvents.length === 0 ? (
               <div className="rounded-xl border border-dashed border-zinc-700 p-3 text-center text-xs text-zinc-500">
-                Finish Player + Action + Outcome + Location and
-                InsightFC will save the tag automatically.
+                Choose Player + Action + required outcome + Location
+                and InsightFC will save the tag automatically.
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -1652,15 +1867,31 @@ export default function TagClipsPage() {
 
                       <span>{event.action}</span>
 
-                      <span
-                        className={
-                          event.outcome === "successful"
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }
-                      >
-                        {event.outcome === "successful" ? "✓" : "✕"}
-                      </span>
+                      {event.outcome ? (
+                        <span
+                          className={
+                            event.outcome === "successful"
+                              ? "text-green-400"
+                              : "text-red-400"
+                          }
+                        >
+                          {event.outcome === "successful"
+                            ? "✓ Success"
+                            : "✕ Fail"}
+                        </span>
+                      ) : null}
+
+                      {event.shot_outcome ? (
+                        <span className="font-semibold text-yellow-300">
+                          {shotOutcomeLabel(event.shot_outcome)}
+                        </span>
+                      ) : null}
+
+                      {event.into_box ? (
+                        <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 font-semibold text-yellow-300">
+                          Into Box
+                        </span>
+                      ) : null}
 
                       <span className="text-zinc-500">
                         {zoneLabel(event.field_zone)}
