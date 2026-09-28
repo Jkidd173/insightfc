@@ -50,6 +50,7 @@ type ClipEventRow = {
   team_side: string | null;
   event_source: string | null;
   confidence: number | string | null;
+  chance_id: string | null;
   field_zone: string | null;
   area: string | null;
   notes: string | null;
@@ -219,6 +220,10 @@ function draftFromEvent(event: ClipEventRow): DraftTag {
     notes: event.notes ?? "",
     eventId: event.id,
   };
+}
+
+function newChanceId() {
+  return crypto.randomUUID();
 }
 
 export default function TagClipsPage() {
@@ -584,6 +589,92 @@ export default function TagClipsPage() {
     applyDraft(EMPTY_DRAFT);
   }
 
+  function calculateChanceId(
+    action: string,
+    outcome: string,
+    shotOutcome: string,
+    eventSeconds: number,
+    existingEventId: string | null
+  ) {
+    const orderedEvents = events
+      .filter(
+        (event) =>
+          event.id !== existingEventId &&
+          event.team_side !== "opponent" &&
+          numberValue(event.event_seconds) <= eventSeconds
+      )
+      .sort(
+        (a, b) =>
+          numberValue(a.event_seconds) -
+          numberValue(b.event_seconds)
+      );
+
+    let activeChanceId: string | null = null;
+
+    for (const event of orderedEvents) {
+      if (event.action === "Possession Won") {
+        activeChanceId = null;
+        continue;
+      }
+
+      const lostPossession =
+        (event.action === "Pass" ||
+          event.action === "Cross" ||
+          event.action === "Take-on") &&
+        event.outcome === "unsuccessful";
+
+      if (lostPossession) {
+        activeChanceId = null;
+        continue;
+      }
+
+      const successfulBoxEntry =
+        (event.action === "Pass" ||
+          event.action === "Cross") &&
+        event.into_box === true &&
+        event.outcome === "successful";
+
+      if (successfulBoxEntry) {
+        activeChanceId =
+          event.chance_id || newChanceId();
+        continue;
+      }
+
+      if (event.action === "Shot") {
+        activeChanceId = null;
+      }
+    }
+
+    if (action === "Possession Won") {
+      return null;
+    }
+
+    const currentLostPossession =
+      (action === "Pass" ||
+        action === "Cross" ||
+        action === "Take-on") &&
+      outcome === "unsuccessful";
+
+    if (currentLostPossession) {
+      return null;
+    }
+
+    const currentSuccessfulBoxEntry =
+      (action === "Pass" || action === "Cross") &&
+      intoBox &&
+      outcome === "successful";
+
+    if (currentSuccessfulBoxEntry) {
+      return activeChanceId || newChanceId();
+    }
+
+    if (action === "Shot" && shotOutcome) {
+      return activeChanceId || newChanceId();
+    }
+
+    return activeChanceId;
+  }
+
   async function loadWorkspace() {
     if (!gameId) return;
 
@@ -610,9 +701,7 @@ export default function TagClipsPage() {
       const json = await response.json();
 
       if (!response.ok || !json.ok) {
-        throw new Error(
-          json?.error || "Failed to load game."
-        );
+        throw new Error(json?.error || "Failed to load game.");
       }
 
       const loadedGame = json.data as GameRow;
@@ -622,9 +711,7 @@ export default function TagClipsPage() {
         await Promise.all([
           supabase
             .from("players")
-            .select(
-              "id,name,jersey_number,position,status"
-            )
+            .select("id,name,jersey_number,position,status")
             .eq("team_id", loadedGame.team_id)
             .order("jersey_number", { ascending: true }),
 
@@ -712,9 +799,7 @@ export default function TagClipsPage() {
       }
 
       const paths = Array.from(
-        new Set(
-          loadedClips.map((clip) => clip.video_path)
-        )
+        new Set(loadedClips.map((clip) => clip.video_path))
       );
 
       const loadedVideos: VideoFile[] = [];
@@ -737,8 +822,7 @@ export default function TagClipsPage() {
       setCurrentClipIndex(0);
     } catch (e: any) {
       setError(
-        e?.message ||
-          "Failed to load tagging workspace."
+        e?.message || "Failed to load tagging workspace."
       );
     } finally {
       setLoading(false);
@@ -784,10 +868,7 @@ export default function TagClipsPage() {
 
     const next = Math.max(
       clipStart,
-      Math.min(
-        clipEnd,
-        video.currentTime + amount
-      )
+      Math.min(clipEnd, video.currentTime + amount)
     );
 
     video.currentTime = next;
@@ -824,11 +905,17 @@ export default function TagClipsPage() {
         selectedPlayerId !== "team" &&
         (selectedAction === "Possession Won"
           ? true
-          : isDefensiveNonPossessionAction(
-              selectedAction
-            )
+          : isDefensiveNonPossessionAction(selectedAction)
           ? false
           : possessionStart);
+
+      const chanceId = calculateChanceId(
+        selectedAction,
+        selectedOutcome,
+        selectedShotOutcome,
+        eventSeconds,
+        activeEventId
+      );
 
       const payload = {
         clip_id: currentClip.id,
@@ -839,22 +926,19 @@ export default function TagClipsPage() {
             : selectedPlayerId,
         created_by: userId,
         action: selectedAction,
-        event_seconds: Number(
-          eventSeconds.toFixed(3)
-        ),
+        event_seconds: Number(eventSeconds.toFixed(3)),
         outcome: needsBinaryOutcome
           ? selectedOutcome
           : null,
         shot_outcome: needsShotOutcome
           ? selectedShotOutcome
           : null,
-        into_box: canBeIntoBox
-          ? intoBox
-          : false,
+        into_box: canBeIntoBox ? intoBox : false,
         possession_start: finalPossessionStart,
         team_side: "our_team",
         event_source: "manual",
         confidence: null,
+        chance_id: chanceId,
         field_zone: selectedZone,
         area: null,
         notes: notes.trim() || null,
@@ -878,16 +962,13 @@ export default function TagClipsPage() {
 
         setEvents((existing) =>
           existing.map((event) =>
-            event.id === updated.id
-              ? updated
-              : event
+            event.id === updated.id ? updated : event
           )
         );
 
         saveDraftLocally(currentClip.id, {
           eventId: updated.id,
-          possessionStart:
-            Boolean(updated.possession_start),
+          possessionStart: Boolean(updated.possession_start),
         });
       } else {
         const { data, error: insertError } =
@@ -903,32 +984,23 @@ export default function TagClipsPage() {
 
         const inserted = data as ClipEventRow;
 
-        setEvents((existing) => [
-          ...existing,
-          inserted,
-        ]);
+        setEvents((existing) => [...existing, inserted]);
 
         setActiveEventId(inserted.id);
 
         saveDraftLocally(currentClip.id, {
           eventId: inserted.id,
-          possessionStart:
-            Boolean(inserted.possession_start),
+          possessionStart: Boolean(inserted.possession_start),
         });
       }
 
       if (!options?.quiet) {
-        showNoticeMessage(
-          "Tag saved automatically"
-        );
+        showNoticeMessage("Tag saved automatically");
       }
 
       return true;
     } catch (e: any) {
-      setError(
-        e?.message ||
-          "Failed to auto-save tag."
-      );
+      setError(e?.message || "Failed to auto-save tag.");
       return false;
     } finally {
       setSavingTag(false);
@@ -1023,9 +1095,7 @@ export default function TagClipsPage() {
       );
     } catch {}
 
-    showNoticeMessage(
-      "Tag saved — ready for another"
-    );
+    showNoticeMessage("Tag saved — ready for another");
   }
 
   async function adjustClipBoundary(
@@ -1040,23 +1110,17 @@ export default function TagClipsPage() {
     if (boundary === "start") {
       newStart = Math.max(
         0,
-        Number(
-          (clipStart + amount).toFixed(3)
-        )
+        Number((clipStart + amount).toFixed(3))
       );
     } else {
       newEnd = Math.max(
         0,
-        Number(
-          (clipEnd + amount).toFixed(3)
-        )
+        Number((clipEnd + amount).toFixed(3))
       );
     }
 
     if (newEnd - newStart < 0.5) {
-      setError(
-        "The clip must be at least 0.5 seconds long."
-      );
+      setError("The clip must be at least 0.5 seconds long.");
       return;
     }
 
@@ -1072,8 +1136,7 @@ export default function TagClipsPage() {
           .update({
             start_seconds: newStart,
             end_seconds: newEnd,
-            updated_at:
-              new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq("id", currentClip.id)
           .select(
@@ -1089,18 +1152,13 @@ export default function TagClipsPage() {
 
       setClips((existing) =>
         existing.map((clip) =>
-          clip.id === currentClip.id
-            ? updatedClip
-            : clip
+          clip.id === currentClip.id ? updatedClip : clip
         )
       );
 
       showNoticeMessage("Clip trim saved");
     } catch (e: any) {
-      setError(
-        e?.message ||
-          "Failed to adjust clip."
-      );
+      setError(e?.message || "Failed to adjust clip.");
     } finally {
       setSavingTrim(false);
     }
@@ -1121,9 +1179,7 @@ export default function TagClipsPage() {
     const video = videoRef.current;
 
     if (video) {
-      const time = numberValue(
-        event.event_seconds
-      );
+      const time = numberValue(event.event_seconds);
 
       video.currentTime = time;
       setCurrentTime(time);
@@ -1132,9 +1188,7 @@ export default function TagClipsPage() {
   }
 
   async function deleteEvent(eventId: string) {
-    const ok = window.confirm(
-      "Delete this tag?"
-    );
+    const ok = window.confirm("Delete this tag?");
 
     if (!ok) return;
 
@@ -1152,9 +1206,7 @@ export default function TagClipsPage() {
       }
 
       setEvents((existing) =>
-        existing.filter(
-          (event) => event.id !== eventId
-        )
+        existing.filter((event) => event.id !== eventId)
       );
 
       if (activeEventId === eventId) {
@@ -1163,10 +1215,7 @@ export default function TagClipsPage() {
 
       showNoticeMessage("Tag deleted");
     } catch (e: any) {
-      setError(
-        e?.message ||
-          "Failed to delete tag."
-      );
+      setError(e?.message || "Failed to delete tag.");
     }
   }
 
@@ -1202,8 +1251,7 @@ export default function TagClipsPage() {
 
       setEvents((existing) =>
         existing.filter(
-          (event) =>
-            event.clip_id !== deletedId
+          (event) => event.clip_id !== deletedId
         )
       );
 
@@ -1230,33 +1278,24 @@ export default function TagClipsPage() {
       setCurrentClipIndex(newIndex);
 
       if (remaining.length > 0) {
-        const nextSorted = [
-          ...remaining,
-        ].sort(
+        const nextSorted = [...remaining].sort(
           (a, b) =>
             numberValue(a.start_seconds) -
             numberValue(b.start_seconds)
         );
 
-        restoreClipTag(
-          nextSorted[newIndex]
-        );
+        restoreClipTag(nextSorted[newIndex]);
       } else {
         applyDraft(EMPTY_DRAFT);
       }
 
       showNoticeMessage("Clip deleted");
     } catch (e: any) {
-      setError(
-        e?.message ||
-          "Failed to delete clip."
-      );
+      setError(e?.message || "Failed to delete clip.");
     }
   }
 
-  function playerLabel(
-    playerId: string | null
-  ) {
+  function playerLabel(playerId: string | null) {
     if (!playerId) return "TEAM";
 
     const player = players.find(
@@ -1288,15 +1327,11 @@ export default function TagClipsPage() {
     if (!selectedAction) return "Outcome";
 
     if (needsBinaryOutcome) {
-      if (
-        selectedOutcome === "successful"
-      ) {
+      if (selectedOutcome === "successful") {
         return "Success";
       }
 
-      if (
-        selectedOutcome === "unsuccessful"
-      ) {
+      if (selectedOutcome === "unsuccessful") {
         return "Fail";
       }
 
@@ -1305,9 +1340,7 @@ export default function TagClipsPage() {
 
     if (needsShotOutcome) {
       return selectedShotOutcome
-        ? shotOutcomeLabel(
-            selectedShotOutcome
-          )
+        ? shotOutcomeLabel(selectedShotOutcome)
         : "Shot outcome";
     }
 
@@ -1319,15 +1352,11 @@ export default function TagClipsPage() {
 
     return () => {
       if (noticeTimerRef.current) {
-        clearTimeout(
-          noticeTimerRef.current
-        );
+        clearTimeout(noticeTimerRef.current);
       }
 
       if (autoSaveTimerRef.current) {
-        clearTimeout(
-          autoSaveTimerRef.current
-        );
+        clearTimeout(autoSaveTimerRef.current);
       }
     };
   }, []);
@@ -1341,11 +1370,7 @@ export default function TagClipsPage() {
   }, [mounted, gameId]);
 
   useEffect(() => {
-    if (
-      !mounted ||
-      !currentClip ||
-      !userId
-    ) {
+    if (!mounted || !currentClip || !userId) {
       return;
     }
 
@@ -1354,9 +1379,7 @@ export default function TagClipsPage() {
     if (!tagComplete) return;
 
     if (autoSaveTimerRef.current) {
-      clearTimeout(
-        autoSaveTimerRef.current
-      );
+      clearTimeout(autoSaveTimerRef.current);
     }
 
     autoSaveTimerRef.current =
@@ -1368,9 +1391,7 @@ export default function TagClipsPage() {
 
     return () => {
       if (autoSaveTimerRef.current) {
-        clearTimeout(
-          autoSaveTimerRef.current
-        );
+        clearTimeout(autoSaveTimerRef.current);
       }
     };
 
@@ -1407,8 +1428,7 @@ export default function TagClipsPage() {
       120
     );
 
-    return () =>
-      window.clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, [
     currentClip?.id,
     currentVideo?.signedUrl,
@@ -1417,15 +1437,12 @@ export default function TagClipsPage() {
   previousClipRef.current = previousClip;
   nextClipRef.current = nextClip;
   spaceTagRef.current = startAnotherTag;
-  togglePlaybackRef.current =
-    togglePlayback;
+  togglePlaybackRef.current = togglePlayback;
 
   useEffect(() => {
     if (!mounted) return;
 
-    function handleKeyDown(
-      event: KeyboardEvent
-    ) {
+    function handleKeyDown(event: KeyboardEvent) {
       if (isTypingTarget(event.target)) {
         return;
       }
@@ -1459,13 +1476,9 @@ export default function TagClipsPage() {
         return;
       }
 
-      const key =
-        event.key.toLowerCase();
+      const key = event.key.toLowerCase();
 
-      const actionByKey: Record<
-        string,
-        string
-      > = {
+      const actionByKey: Record<string, string> = {
         p: "Pass",
         x: "Cross",
         c: "Carry 10+ yd",
@@ -1486,27 +1499,19 @@ export default function TagClipsPage() {
 
       if (
         key === "y" &&
-        actionNeedsBinaryOutcome(
-          selectedAction
-        )
+        actionNeedsBinaryOutcome(selectedAction)
       ) {
         event.preventDefault();
-        setSelectedOutcome(
-          "successful"
-        );
+        setSelectedOutcome("successful");
         return;
       }
 
       if (
         key === "n" &&
-        actionNeedsBinaryOutcome(
-          selectedAction
-        )
+        actionNeedsBinaryOutcome(selectedAction)
       ) {
         event.preventDefault();
-        setSelectedOutcome(
-          "unsuccessful"
-        );
+        setSelectedOutcome("unsuccessful");
       }
     }
 
@@ -1587,9 +1592,7 @@ export default function TagClipsPage() {
           <button
             className="btn-primary mt-5"
             onClick={() =>
-              router.push(
-                `/games/${gameId}/tag`
-              )
+              router.push(`/games/${gameId}/tag`)
             }
           >
             Go to Clip Events
@@ -1622,16 +1625,13 @@ export default function TagClipsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="mr-2 hidden text-xs text-zinc-500 lg:block">
-              ← → Clips • Shift Play/Pause •
-              Space Another Tag
+              ← → Clips • Shift Play/Pause • Space Another Tag
             </div>
 
             <button
               className="btn-ghost"
               onClick={() =>
-                router.push(
-                  `/teams/${game.team_id}`
-                )
+                router.push(`/teams/${game.team_id}`)
               }
             >
               Team Hub
@@ -1640,9 +1640,7 @@ export default function TagClipsPage() {
             <button
               className="btn-ghost"
               onClick={() =>
-                router.push(
-                  `/games/${gameId}/tag`
-                )
+                router.push(`/games/${gameId}/tag`)
               }
             >
               ← Clipping
@@ -1667,16 +1665,13 @@ export default function TagClipsPage() {
                 </div>
 
                 <div className="text-sm font-bold">
-                  Clip{" "}
-                  {currentClipIndex + 1} /{" "}
+                  Clip {currentClipIndex + 1} /{" "}
                   {sortedClips.length}
                 </div>
               </div>
 
               <div className="rounded-lg bg-yellow-400 px-2 py-1 text-[11px] font-black text-black">
-                {savingTag
-                  ? "Saving…"
-                  : "Auto-save ✓"}
+                {savingTag ? "Saving…" : "Auto-save ✓"}
               </div>
             </div>
 
@@ -1689,14 +1684,11 @@ export default function TagClipsPage() {
                 <button
                   type="button"
                   className={`rounded-lg border px-2 py-2 text-xs font-bold transition ${
-                    selectedPlayerId ===
-                    "team"
+                    selectedPlayerId === "team"
                       ? selectedClass
                       : normalClass
                   }`}
-                  onClick={() =>
-                    selectPlayer("team")
-                  }
+                  onClick={() => selectPlayer("team")}
                 >
                   TEAM
                 </button>
@@ -1706,19 +1698,14 @@ export default function TagClipsPage() {
                     key={player.id}
                     type="button"
                     className={`truncate rounded-lg border px-2 py-2 text-xs font-bold transition ${
-                      selectedPlayerId ===
-                      player.id
+                      selectedPlayerId === player.id
                         ? selectedClass
                         : normalClass
                     }`}
-                    onClick={() =>
-                      selectPlayer(player.id)
-                    }
+                    onClick={() => selectPlayer(player.id)}
                   >
-                    {player.jersey_number !==
-                      null &&
-                    player.jersey_number !==
-                      undefined
+                    {player.jersey_number !== null &&
+                    player.jersey_number !== undefined
                       ? `#${player.jersey_number} `
                       : ""}
                     {player.name}
@@ -1738,20 +1725,13 @@ export default function TagClipsPage() {
                     key={action.label}
                     type="button"
                     className={`flex items-center justify-between gap-2 rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
-                      selectedAction ===
-                      action.label
+                      selectedAction === action.label
                         ? selectedClass
                         : normalClass
                     }`}
-                    onClick={() =>
-                      selectAction(
-                        action.label
-                      )
-                    }
+                    onClick={() => selectAction(action.label)}
                   >
-                    <span>
-                      {action.label}
-                    </span>
+                    <span>{action.label}</span>
                     <span className="opacity-70">
                       ({action.key})
                     </span>
@@ -1770,15 +1750,12 @@ export default function TagClipsPage() {
                   <button
                     type="button"
                     className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
-                      selectedOutcome ===
-                      "successful"
+                      selectedOutcome === "successful"
                         ? selectedClass
                         : normalClass
                     }`}
                     onClick={() =>
-                      setSelectedOutcome(
-                        "successful"
-                      )
+                      setSelectedOutcome("successful")
                     }
                   >
                     ✓ Success (Y)
@@ -1787,15 +1764,12 @@ export default function TagClipsPage() {
                   <button
                     type="button"
                     className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
-                      selectedOutcome ===
-                      "unsuccessful"
+                      selectedOutcome === "unsuccessful"
                         ? selectedClass
                         : normalClass
                     }`}
                     onClick={() =>
-                      setSelectedOutcome(
-                        "unsuccessful"
-                      )
+                      setSelectedOutcome("unsuccessful")
                     }
                   >
                     ✕ Fail (N)
@@ -1811,27 +1785,22 @@ export default function TagClipsPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5">
-                  {SHOT_OUTCOMES.map(
-                    (outcome) => (
-                      <button
-                        key={outcome.id}
-                        type="button"
-                        className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
-                          selectedShotOutcome ===
-                          outcome.id
-                            ? selectedClass
-                            : normalClass
-                        }`}
-                        onClick={() =>
-                          setSelectedShotOutcome(
-                            outcome.id
-                          )
-                        }
-                      >
-                        {outcome.label}
-                      </button>
-                    )
-                  )}
+                  {SHOT_OUTCOMES.map((outcome) => (
+                    <button
+                      key={outcome.id}
+                      type="button"
+                      className={`rounded-lg border px-2 py-2 text-[11px] font-bold transition ${
+                        selectedShotOutcome === outcome.id
+                          ? selectedClass
+                          : normalClass
+                      }`}
+                      onClick={() =>
+                        setSelectedShotOutcome(outcome.id)
+                      }
+                    >
+                      {outcome.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             ) : null}
@@ -1856,35 +1825,23 @@ export default function TagClipsPage() {
 
                 <button
                   type="button"
-                  disabled={
-                    selectedAction ===
-                    "Cross"
-                  }
+                  disabled={selectedAction === "Cross"}
                   className={`w-full rounded-lg border px-3 py-2 text-[11px] font-bold transition ${
-                    intoBox
-                      ? selectedClass
-                      : normalClass
+                    intoBox ? selectedClass : normalClass
                   } ${
-                    selectedAction ===
-                    "Cross"
+                    selectedAction === "Cross"
                       ? "cursor-default"
                       : ""
                   }`}
                   onClick={() => {
-                    if (
-                      selectedAction !==
-                      "Cross"
-                    ) {
-                      setIntoBox(
-                        (value) => !value
-                      );
+                    if (selectedAction !== "Cross") {
+                      setIntoBox((value) => !value);
                     }
                   }}
                 >
                   {intoBox ? "✓ " : ""}
                   Into Box
-                  {selectedAction ===
-                  "Cross"
+                  {selectedAction === "Cross"
                     ? " — automatic for Cross"
                     : ""}
                 </button>
@@ -1902,8 +1859,7 @@ export default function TagClipsPage() {
                 <button
                   type="button"
                   disabled={
-                    selectedAction ===
-                      "Possession Won" ||
+                    selectedAction === "Possession Won" ||
                     isDefensiveNonPossessionAction(
                       selectedAction
                     )
@@ -1913,8 +1869,7 @@ export default function TagClipsPage() {
                       ? selectedClass
                       : normalClass
                   } ${
-                    selectedAction ===
-                      "Possession Won" ||
+                    selectedAction === "Possession Won" ||
                     isDefensiveNonPossessionAction(
                       selectedAction
                     )
@@ -1923,8 +1878,7 @@ export default function TagClipsPage() {
                   }`}
                   onClick={() => {
                     if (
-                      selectedAction ===
-                        "Possession Won" ||
+                      selectedAction === "Possession Won" ||
                       isDefensiveNonPossessionAction(
                         selectedAction
                       )
@@ -1941,8 +1895,7 @@ export default function TagClipsPage() {
                     ? "✓ New Possession"
                     : "New Possession"}
 
-                  {selectedAction ===
-                  "Possession Won"
+                  {selectedAction === "Possession Won"
                     ? " — automatic"
                     : isDefensiveNonPossessionAction(
                         selectedAction
@@ -1952,8 +1905,7 @@ export default function TagClipsPage() {
                 </button>
 
                 <div className="mt-1 text-[9px] leading-4 text-zinc-500">
-                  Counts when this player
-                  receives or gains controlled
+                  Counts when this player receives or gains controlled
                   possession.
                 </div>
               </div>
@@ -1974,27 +1926,22 @@ export default function TagClipsPage() {
                 <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/35" />
 
                 <div className="absolute inset-0 z-10 grid grid-cols-3 grid-rows-3">
-                  {FIELD_ZONES.map(
-                    (zone) => (
-                      <button
-                        key={zone.id}
-                        type="button"
-                        className={`border text-[9px] font-black transition ${
-                          selectedZone ===
-                          zone.id
-                            ? "z-30 border-yellow-200 bg-yellow-400 text-black shadow-[inset_0_0_0_2px_rgba(255,255,255,0.55),0_0_18px_rgba(250,204,21,0.55)]"
-                            : "border-white/20 bg-transparent text-white hover:bg-white/10"
-                        }`}
-                        onClick={() =>
-                          setSelectedZone(
-                            zone.id
-                          )
-                        }
-                      >
-                        {zone.short}
-                      </button>
-                    )
-                  )}
+                  {FIELD_ZONES.map((zone) => (
+                    <button
+                      key={zone.id}
+                      type="button"
+                      className={`border text-[9px] font-black transition ${
+                        selectedZone === zone.id
+                          ? "z-30 border-yellow-200 bg-yellow-400 text-black shadow-[inset_0_0_0_2px_rgba(255,255,255,0.55),0_0_18px_rgba(250,204,21,0.55)]"
+                          : "border-white/20 bg-transparent text-white hover:bg-white/10"
+                      }`}
+                      onClick={() =>
+                        setSelectedZone(zone.id)
+                      }
+                    >
+                      {zone.short}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -2016,37 +1963,28 @@ export default function TagClipsPage() {
 
               <div className="mt-1 truncate text-xs font-semibold">
                 {selectedPlayerId
-                  ? selectedPlayerId ===
-                    "team"
+                  ? selectedPlayerId === "team"
                     ? "TEAM"
-                    : playerLabel(
-                        selectedPlayerId
-                      )
+                    : playerLabel(selectedPlayerId)
                   : "Choose player"}
               </div>
 
               <div className="mt-1 text-[10px] text-zinc-400">
-                {selectedAction ||
-                  "Action"}{" "}
-                •{" "}
+                {selectedAction || "Action"} •{" "}
                 {currentOutcomeLabel()} •{" "}
                 {selectedZone
-                  ? zoneLabel(
-                      selectedZone
-                    )
+                  ? zoneLabel(selectedZone)
                   : "Location"}
               </div>
 
-              {canBeIntoBox &&
-              intoBox ? (
+              {canBeIntoBox && intoBox ? (
                 <div className="mt-1 text-[10px] font-bold text-yellow-300">
                   ✓ Into Box
                 </div>
               ) : null}
 
               {possessionStart &&
-              selectedPlayerId !==
-                "team" ? (
+              selectedPlayerId !== "team" ? (
                 <div className="mt-1 text-[10px] font-bold text-yellow-300">
                   ✓ New Possession
                 </div>
@@ -2070,14 +2008,10 @@ export default function TagClipsPage() {
             <button
               className="btn-ghost w-full text-[11px]"
               onClick={() =>
-                setShowNotes(
-                  (value) => !value
-                )
+                setShowNotes((value) => !value)
               }
             >
-              {showNotes
-                ? "Hide Note"
-                : "+ Optional Note"}
+              {showNotes ? "Hide Note" : "+ Optional Note"}
             </button>
 
             {showNotes ? (
@@ -2085,9 +2019,7 @@ export default function TagClipsPage() {
                 className="input min-h-14 w-full text-xs"
                 value={notes}
                 onChange={(event) =>
-                  setNotes(
-                    event.target.value
-                  )
+                  setNotes(event.target.value)
                 }
                 placeholder="Coaching note…"
               />
@@ -2111,22 +2043,17 @@ export default function TagClipsPage() {
 
               <div className="text-center">
                 <div className="text-sm font-bold">
-                  Clip{" "}
-                  {currentClipIndex + 1}{" "}
-                  of {sortedClips.length}
+                  Clip {currentClipIndex + 1} of{" "}
+                  {sortedClips.length}
                 </div>
 
                 <div className="text-[11px] text-zinc-500">
                   {formatTime(clipStart)} →{" "}
                   {formatTime(clipEnd)}
                   {" • "}
-                  {clipDuration.toFixed(1)}
-                  s
+                  {clipDuration.toFixed(1)}s
                   {" • "}
-                  {
-                    currentClipEvents.length
-                  }{" "}
-                  saved tags
+                  {currentClipEvents.length} saved tags
                 </div>
               </div>
 
@@ -2146,37 +2073,23 @@ export default function TagClipsPage() {
           <div className="card p-2">
             {currentVideo ? (
               <video
-                key={
-                  currentVideo.signedUrl
-                }
+                key={currentVideo.signedUrl}
                 ref={videoRef}
-                src={
-                  currentVideo.signedUrl
-                }
+                src={currentVideo.signedUrl}
                 controls
                 playsInline
                 preload="metadata"
                 className="mx-auto w-full rounded-xl bg-black object-contain xl:max-h-[66vh] 2xl:max-h-[70vh]"
                 onLoadedMetadata={() => {
-                  const video =
-                    videoRef.current;
+                  const video = videoRef.current;
 
                   if (!video) return;
 
-                  video.currentTime =
-                    clipStart;
-
-                  setCurrentTime(
-                    clipStart
-                  );
-
-                  video
-                    .play()
-                    .catch(() => {});
+                  video.currentTime = clipStart;
+                  setCurrentTime(clipStart);
+                  video.play().catch(() => {});
                 }}
-                onTimeUpdate={
-                  handleTimeUpdate
-                }
+                onTimeUpdate={handleTimeUpdate}
               />
             ) : (
               <div className="flex aspect-video items-center justify-center rounded-xl bg-black text-zinc-400">
@@ -2191,36 +2104,28 @@ export default function TagClipsPage() {
                 </div>
 
                 <div className="font-mono font-bold text-yellow-300">
-                  {formatTime(
-                    currentTime
-                  )}
+                  {formatTime(currentTime)}
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-1.5">
                 <button
                   className="btn-ghost"
-                  onClick={() =>
-                    movePlayhead(-0.5)
-                  }
+                  onClick={() => movePlayhead(-0.5)}
                 >
                   −0.5
                 </button>
 
                 <button
                   className="btn-ghost"
-                  onClick={
-                    togglePlayback
-                  }
+                  onClick={togglePlayback}
                 >
                   Play / Pause
                 </button>
 
                 <button
                   className="btn-ghost"
-                  onClick={() =>
-                    movePlayhead(0.5)
-                  }
+                  onClick={() => movePlayhead(0.5)}
                 >
                   +0.5
                 </button>
@@ -2247,49 +2152,39 @@ export default function TagClipsPage() {
                 </span>
 
                 <span className="ml-2 text-xs text-zinc-500">
-                  {clipDuration.toFixed(
-                    1
-                  )}{" "}
-                  sec
+                  {clipDuration.toFixed(1)} sec
                 </span>
               </div>
 
               <div className="text-[10px] text-zinc-500">
-                {savingTrim
-                  ? "Saving…"
-                  : "Auto-saves ✓"}
+                {savingTrim ? "Saving…" : "Auto-saves ✓"}
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-              {(
-                ["start", "end"] as const
-              ).map((boundary) => (
-                <div
-                  key={boundary}
-                  className="rounded-xl border border-zinc-800 p-2"
-                >
-                  <div className="mb-1 text-[10px] text-zinc-500">
-                    {boundary.toUpperCase()}{" "}
-                    <span className="font-mono font-bold text-yellow-300">
-                      {formatTime(
-                        boundary ===
-                          "start"
-                          ? clipStart
-                          : clipEnd
-                      )}
-                    </span>
-                  </div>
+              {(["start", "end"] as const).map(
+                (boundary) => (
+                  <div
+                    key={boundary}
+                    className="rounded-xl border border-zinc-800 p-2"
+                  >
+                    <div className="mb-1 text-[10px] text-zinc-500">
+                      {boundary.toUpperCase()}{" "}
+                      <span className="font-mono font-bold text-yellow-300">
+                        {formatTime(
+                          boundary === "start"
+                            ? clipStart
+                            : clipEnd
+                        )}
+                      </span>
+                    </div>
 
-                  <div className="grid grid-cols-6 gap-1">
-                    {TRIM_AMOUNTS.map(
-                      (amount) => (
+                    <div className="grid grid-cols-6 gap-1">
+                      {TRIM_AMOUNTS.map((amount) => (
                         <button
                           key={`${boundary}-${amount}`}
                           className="btn-ghost px-1 py-1.5 text-[10px]"
-                          disabled={
-                            savingTrim
-                          }
+                          disabled={savingTrim}
                           onClick={() =>
                             adjustClipBoundary(
                               boundary,
@@ -2297,15 +2192,13 @@ export default function TagClipsPage() {
                             )
                           }
                         >
-                          {formatTrimAmount(
-                            amount
-                          )}
+                          {formatTrimAmount(amount)}
                         </button>
-                      )
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
           </div>
 
@@ -2317,168 +2210,135 @@ export default function TagClipsPage() {
                 </div>
 
                 <div className="text-[11px] text-zinc-500">
-                  Saved automatically as
-                  you work
+                  Saved automatically as you work
                 </div>
               </div>
 
               <div className="rounded-lg bg-yellow-400 px-2.5 py-1 text-sm font-black text-black">
-                {
-                  currentClipEvents.length
-                }
+                {currentClipEvents.length}
               </div>
             </div>
 
-            {currentClipEvents.length ===
-            0 ? (
+            {currentClipEvents.length === 0 ? (
               <div className="rounded-xl border border-dashed border-zinc-700 p-3 text-center text-xs text-zinc-500">
-                Choose Player + Action +
-                required outcome +
-                Location and InsightFC
-                will save the tag
+                Choose Player + Action + required outcome +
+                Location and InsightFC will save the tag
                 automatically.
               </div>
             ) : (
               <div className="space-y-1.5">
-                {currentClipEvents.map(
-                  (event) => (
-                    <div
-                      key={event.id}
-                      className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 ${
-                        activeEventId ===
-                        event.id
-                          ? "border-yellow-400 bg-yellow-400/10"
-                          : "border-zinc-800 bg-black/25"
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                        <span className="font-mono text-yellow-300">
-                          {formatTime(
-                            numberValue(
-                              event.event_seconds
-                            )
-                          )}
-                        </span>
+                {currentClipEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 ${
+                      activeEventId === event.id
+                        ? "border-yellow-400 bg-yellow-400/10"
+                        : "border-zinc-800 bg-black/25"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                      <span className="font-mono text-yellow-300">
+                        {formatTime(
+                          numberValue(event.event_seconds)
+                        )}
+                      </span>
 
-                        <span className="font-semibold">
-                          {playerLabel(
-                            event.player_id
-                          )}
-                        </span>
+                      <span className="font-semibold">
+                        {playerLabel(event.player_id)}
+                      </span>
 
-                        <span>
-                          {event.action}
-                        </span>
+                      <span>{event.action}</span>
 
-                        {event.outcome ? (
-                          <span
-                            className={
-                              event.outcome ===
-                              "successful"
-                                ? "text-green-400"
-                                : "text-red-400"
-                            }
-                          >
-                            {event.outcome ===
-                            "successful"
-                              ? "✓ Success"
-                              : "✕ Fail"}
-                          </span>
-                        ) : null}
-
-                        {event.shot_outcome ? (
-                          <span className="font-semibold text-yellow-300">
-                            {shotOutcomeLabel(
-                              event.shot_outcome
-                            )}
-                          </span>
-                        ) : null}
-
-                        {event.into_box ? (
-                          <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 font-semibold text-yellow-300">
-                            Into Box
-                          </span>
-                        ) : null}
-
-                        {event.possession_start ? (
-                          <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 font-semibold text-yellow-300">
-                            New Possession
-                          </span>
-                        ) : null}
-
-                        <span className="text-zinc-500">
-                          {zoneLabel(
-                            event.field_zone
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="flex gap-1">
-                        <button
-                          className="btn-ghost text-xs"
-                          onClick={() => {
-                            const video =
-                              videoRef.current;
-
-                            if (!video)
-                              return;
-
-                            const time =
-                              numberValue(
-                                event.event_seconds
-                              );
-
-                            video.currentTime =
-                              time;
-
-                            setCurrentTime(
-                              time
-                            );
-
-                            video
-                              .play()
-                              .catch(
-                                () => {}
-                              );
-                          }}
-                        >
-                          Watch
-                        </button>
-
-                        <button
-                          className="btn-ghost text-xs"
-                          onClick={() =>
-                            editEvent(
-                              event
-                            )
+                      {event.outcome ? (
+                        <span
+                          className={
+                            event.outcome === "successful"
+                              ? "text-green-400"
+                              : "text-red-400"
                           }
                         >
-                          Edit
-                        </button>
+                          {event.outcome === "successful"
+                            ? "✓ Success"
+                            : "✕ Fail"}
+                        </span>
+                      ) : null}
 
-                        <button
-                          className="btn-danger text-xs"
-                          onClick={() =>
-                            deleteEvent(
-                              event.id
-                            )
-                          }
-                        >
-                          ×
-                        </button>
-                      </div>
+                      {event.shot_outcome ? (
+                        <span className="font-semibold text-yellow-300">
+                          {shotOutcomeLabel(
+                            event.shot_outcome
+                          )}
+                        </span>
+                      ) : null}
+
+                      {event.into_box ? (
+                        <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 font-semibold text-yellow-300">
+                          Into Box
+                        </span>
+                      ) : null}
+
+                      {event.possession_start ? (
+                        <span className="rounded bg-yellow-400/10 px-1.5 py-0.5 font-semibold text-yellow-300">
+                          New Possession
+                        </span>
+                      ) : null}
+
+                      {event.chance_id ? (
+                        <span className="rounded bg-emerald-400/10 px-1.5 py-0.5 font-semibold text-emerald-300">
+                          Chance
+                        </span>
+                      ) : null}
+
+                      <span className="text-zinc-500">
+                        {zoneLabel(event.field_zone)}
+                      </span>
                     </div>
-                  )
-                )}
+
+                    <div className="flex gap-1">
+                      <button
+                        className="btn-ghost text-xs"
+                        onClick={() => {
+                          const video = videoRef.current;
+
+                          if (!video) return;
+
+                          const time = numberValue(
+                            event.event_seconds
+                          );
+
+                          video.currentTime = time;
+                          setCurrentTime(time);
+                          video.play().catch(() => {});
+                        }}
+                      >
+                        Watch
+                      </button>
+
+                      <button
+                        className="btn-ghost text-xs"
+                        onClick={() => editEvent(event)}
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        className="btn-danger text-xs"
+                        onClick={() =>
+                          deleteEvent(event.id)
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 pt-3">
               <button
                 className="btn-danger text-xs"
-                onClick={
-                  deleteCurrentClip
-                }
+                onClick={deleteCurrentClip}
               >
                 Delete Clip
               </button>
@@ -2487,12 +2347,10 @@ export default function TagClipsPage() {
                 <button
                   className="btn-ghost"
                   disabled={
-                    currentClipIndex ===
-                      0 || savingTag
+                    currentClipIndex === 0 ||
+                    savingTag
                   }
-                  onClick={
-                    previousClip
-                  }
+                  onClick={previousClip}
                 >
                   ← Previous
                 </button>
